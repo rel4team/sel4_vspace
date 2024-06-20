@@ -1,7 +1,11 @@
+/// 在`PSpace`段的虚拟地址空间中的指针
 pub type pptr_t = usize;
+/// 物理地址空间指针
 pub type paddr_t = usize;
+/// 用戶地址地址空间中虚拟的指针
 pub type vptr_t = usize;
 
+/// 进行系统调用时，应用程序向内核传递信息的消息格式
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct vm_attributes_t {

@@ -10,12 +10,16 @@ use super::utils::{paddr_to_pptr, RISCV_GET_PT_INDEX};
 use super::asid::{asid_t, find_vspace_for_asid};
 use super::vm_rights::{RISCVGetWriteFromVMRights, RISCVGetReadFromVMRights};
 
+/// 页表项（`page table entry`）
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct pte_t {
     pub words: [usize; 1],
 }
 
+///lookup_pt_slot函数的返回值，
+/// `ptSlot`：找到的虚地址对应的`pte`的存放槽
+/// `ptBitsLeft`:找到叶子节点时，虚地址剩余未被索引的位置
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct lookupPTSlot_ret_t {
@@ -48,6 +52,7 @@ impl pte_t {
         }
     }
 
+    /// 创建一个用户使用的页表项（`Global=0`、`User=1`）
     #[inline]
     pub fn make_user_pte(paddr: usize, executable: bool, vm_rights: usize) -> Self {
         let write = RISCVGetWriteFromVMRights(vm_rights);
@@ -69,6 +74,7 @@ impl pte_t {
         )
     }
 
+    ///创建内核态页表项（`Global=1`、`User=0`）
     #[inline]
     pub fn pte_next(phys_addr: usize, is_leaf: bool) -> Self {
         let ppn = (phys_addr >> 12) as usize;
@@ -119,6 +125,7 @@ impl pte_t {
         pte_t { words: [0] }
     }
 
+    ///判断是页目录节点还是叶子节点，当`valid`置1，`read``write``exec`置0时，代表为叶子节点
     #[inline]
     pub fn is_pte_table(&self) -> bool {
         self.get_vaild() != 0 && !(self.get_read() != 0 ||self.get_write() != 0 || self.get_execute() != 0)
@@ -134,6 +141,7 @@ impl pte_t {
         convert_to_type_ref::<pte_t>(paddr_to_pptr(self.get_ppn() << seL4_PageTableBits))
     }
 
+    ///用于记录某个虚拟地址`vptr`对应的pte表项在内存中的位置
     pub fn lookup_pt_slot(&self, vptr: vptr_t) -> lookupPTSlot_ret_t {
         let mut level = CONFIG_PT_LEVELS - 1;
         let mut pt = self as *const pte_t as usize as *mut pte_t;

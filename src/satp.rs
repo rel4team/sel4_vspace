@@ -2,6 +2,7 @@ use riscv::register::satp;
 use sel4_common::sbi::remote_sfence_vma;
 use super::structures::paddr_t;
 
+///`satp`寄存器对应的内存备份
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct satp_t {
@@ -40,6 +41,7 @@ pub fn sfence_local() {
     }
 }
 
+///对汇编指令`sfence.vma`的简单封装，清空`cache`、`tlb`
 #[cfg(not(feature = "ENABLE_SMP"))]
 #[inline]
 pub fn sfence() {
@@ -48,7 +50,7 @@ pub fn sfence() {
     }
 }
 
-
+///设置页表，创建一个新的satp的值，然后将其写入satp寄存器
 #[inline]
 #[no_mangle]
 pub fn setVSpaceRoot(addr: paddr_t, asid: usize) {
