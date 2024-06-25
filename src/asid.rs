@@ -49,6 +49,8 @@ pub struct findVSpaceForASID_ret {
 }
 
 /// `riscvKSASIDSpace`寻找对应`index`的`asid pool`
+/// 
+/// From `riscvKSASIDSpace` get the index-relevant asid pool.
 #[inline]
 pub fn get_asid_pool_by_index(index: usize) -> Option<&'static mut asid_pool_t> {
     unsafe {
@@ -60,6 +62,8 @@ pub fn get_asid_pool_by_index(index: usize) -> Option<&'static mut asid_pool_t> 
 }
 
 /// `riscvKSASIDSpace`设置对应`index`的`asid pool`
+/// 
+/// From `riscvKSASIDSpace` set the index-relevant asid pool.
 pub fn set_asid_pool_by_index(index: usize, pool_ptr: pptr_t) {
     // assert!(index < BIT!(asidHighBits));
     unsafe {
@@ -68,6 +72,8 @@ pub fn set_asid_pool_by_index(index: usize, pool_ptr: pptr_t) {
 }
 
 ///根据给定的`asid`在`riscvKSASIDTable`中寻找对应的虚拟地址空间页表基址
+/// 
+/// Find the root page table associated with asid.
 #[no_mangle]
 pub fn find_vspace_for_asid(asid: asid_t) -> findVSpaceForASID_ret {
     let mut ret: findVSpaceForASID_ret = findVSpaceForASID_ret {
@@ -114,6 +120,8 @@ fn hwASIDFlush(asid: asid_t) {
 }
 ///在`riscvKSASIDTable`中删除对应的`asid pool`，
 /// 并设置新使用的页表为`default_vspace_cap`提供的页表
+/// 
+/// delete the asid pool which contains many asids.
 pub fn delete_asid_pool(asid_base: asid_t, pool: *mut asid_pool_t, default_vspace_cap: &cap_t) -> Result<(), lookup_fault_t> {
     unsafe {
         if riscvKSASIDTable[asid_base >> asidLowBits] == pool {
@@ -126,6 +134,8 @@ pub fn delete_asid_pool(asid_base: asid_t, pool: *mut asid_pool_t, default_vspac
 }
 ///在`asid pool`中删除对应的`asid`,
 /// 并设置新使用的页表为`default_vspace_cap`提供的页表
+/// 
+/// delete the asid from asid pool.
 pub fn delete_asid(asid: asid_t, vspace: *mut pte_t, default_vspace_cap: &cap_t) -> Result<(), lookup_fault_t> {
     unsafe {
         let poolPtr = riscvKSASIDTable[asid >> asidLowBits];

@@ -22,6 +22,8 @@ pub fn RISCV_GET_PT_INDEX(addr: usize, n: usize) -> usize {
 /// 根页表对应2^30=1GB,30位
 /// 一级页表对应2^21=2MB，21位
 /// 二级页表对应2^12=4KB，12位
+/// 
+/// Get n levels page bit size
 #[inline]
 pub fn RISCV_GET_LVL_PGSIZE_BITS(n: usize) -> usize {
     ((PT_INDEX_BITS) * (((CONFIG_PT_LEVELS) - 1) - (n))) + seL4_PageBits
@@ -31,6 +33,8 @@ pub fn RISCV_GET_LVL_PGSIZE_BITS(n: usize) -> usize {
 /// 根页表对应2^30=1GB,30位
 /// 一级页表对应2^21=2MB，21位
 /// 二级页表对应2^12=4KB，12位
+/// 
+/// Get n levels page size
 #[inline]
 pub fn RISCV_GET_LVL_PGSIZE(n: usize) -> usize {
     BIT!(RISCV_GET_LVL_PGSIZE_BITS(n))

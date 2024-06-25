@@ -68,6 +68,7 @@ pub static mut kernel_image_level2_pt: [pte_t; BIT!(PT_INDEX_BITS)] =
 ///
 ///                      virtual address space                          physical address space
 /// ```
+/// 
 #[no_mangle]
 pub fn rust_map_kernel_window() {
     // 内核地址空间中直接映射物理地址空间的起始地址
@@ -113,6 +114,8 @@ pub fn rust_map_kernel_window() {
 }
 
 /// 激活内核页表，将`satp`的值设置为内核页表根页表地址
+/// 
+/// Activate kernel vspace, assign kernel root page table's value to satp.
 #[inline]
 pub fn activate_kernel_vspace() {
     unsafe {
@@ -121,6 +124,9 @@ pub fn activate_kernel_vspace() {
 }
 
 /// 拷贝内核页表到新给出的页表基地址`Lvl1pt`，当创建一个进程的时候，会拷贝一个新的页表给新创建的进程，新的页表中包含内核地址空间
+///
+/// Copy the whole kernel page table into a new page table. 
+/// when create a new process, a new page table will be alloced to the new process.
 #[no_mangle]
 pub fn copyGlobalMappings(Lvl1pt: usize) {
     let mut i: usize = RISCV_GET_PT_INDEX(0x80000000, 0);
@@ -134,6 +140,8 @@ pub fn copyGlobalMappings(Lvl1pt: usize) {
 }
 
 ///根据给定的`vspace_root`设置相应的页表，会检查`vspace_root`是否合法，如果不合法默认设置为内核页表
+/// 
+/// Use page table in vspace_root to set the satp register.
 pub fn set_vm_root(vspace_root: &cap_t) -> Result<(), lookup_fault_t> {
     if vspace_root.get_cap_type() != CapTag::CapPageTableCap {
         unsafe {
