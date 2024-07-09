@@ -3,16 +3,18 @@ use core::{
     ops::{Deref, DerefMut},
 };
 
-use super::{
-    machine::*,
-    pte::{self, PTEFlags},
-};
+use super::{machine::*, pte::PTEFlags};
 use crate::{asid_t, find_vspace_for_asid, pptr_t, pptr_to_paddr, pte_t, vptr_t};
 use sel4_common::{
-    arch::{maskVMRights, vm_rights_t}, fault::lookup_fault_t, sel4_config::{
-        asidInvalid, seL4_LargePageBits, ARM_Large_Page, ARM_Small_Page, PADDR_BASE, PADDR_TOP,
-        PPTR_BASE, PPTR_TOP, PT_INDEX_BITS,
-    }, structures::exception_t, utils::convert_to_mut_type_ref, BIT
+    arch::{
+        config::{KERNEL_ELF_BASE_OFFSET, PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_TOP},
+        vm_rights_t,
+    },
+    fault::lookup_fault_t,
+    sel4_config::{asidInvalid, seL4_LargePageBits, ARM_Large_Page, ARM_Small_Page, PT_INDEX_BITS},
+    structures::exception_t,
+    utils::convert_to_mut_type_ref,
+    BIT,
 };
 use sel4_cspace::interface::{cap_t, CapTag};
 
@@ -182,8 +184,14 @@ pub fn create_it_frame_cap(pptr: pptr_t, vptr: vptr_t, asid: asid_t, use_large: 
 pub fn activate_kernel_vspace() {
     unsafe {
         clean_invalidate_l1_caches();
-        setCurrentKernelVSpaceRoot(ttbr_new(0, kpptr_to_paddr(armKSGlobalKernelPGD.as_ptr() as usize)));
-        setCurrentUserVSpaceRoot(ttbr_new(0, kpptr_to_paddr(armKSGlobalUserVSpace.as_ptr() as usize)));
+        setCurrentKernelVSpaceRoot(ttbr_new(
+            0,
+            armKSGlobalKernelPGD.as_ptr() as usize - PPTR_BASE,
+        ));
+        setCurrentUserVSpaceRoot(ttbr_new(
+            0,
+            armKSGlobalUserVSpace.as_ptr() as usize - PPTR_BASE,
+        ));
         invalidate_local_tlb();
         /* A53 hardware does not support TLB locking */
     }

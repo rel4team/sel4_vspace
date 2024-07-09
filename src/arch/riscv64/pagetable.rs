@@ -1,9 +1,10 @@
 use crate::{paddr_t, pte_t, PageTable};
 use sel4_common::{
-    sel4_config::{
+    arch::config::{
         KERNEL_ELF_BASE, KERNEL_ELF_PADDR_BASE, PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_BASE_OFFSET,
-        PPTR_TOP, PT_INDEX_BITS,
+        PPTR_TOP,
     },
+    sel4_config::PT_INDEX_BITS,
     BIT, ROUND_DOWN,
 };
 

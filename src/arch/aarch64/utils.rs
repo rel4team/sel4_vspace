@@ -1,4 +1,8 @@
-use sel4_common::{sel4_config::*, MASK};
+use sel4_common::{
+    arch::config::{KERNEL_ELF_BASE_OFFSET, PPTR_BASE_OFFSET},
+    sel4_config::*,
+    MASK,
+};
 
 use crate::pte_t;
 pub const KPT_LEVELS: usize = 4;

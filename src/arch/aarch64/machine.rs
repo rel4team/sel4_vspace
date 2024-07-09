@@ -13,7 +13,7 @@ pub fn setCurrentUserVSpaceRoot(val: usize) {
 }
 
 #[inline]
-pub fn ttbr_new(asid: usize, addr: usize) -> usize {
+pub const fn ttbr_new(asid: usize, addr: usize) -> usize {
     (asid & 0xffff) << 48 | (addr & 0xffffffffffff)
 }
 
@@ -83,13 +83,9 @@ pub fn cleanCacheRange_RAM(start: usize, end: usize, pstart: usize) {
     plat_cleanL2Range(pstart, pstart + (end - start));
 }
 
-pub fn cleanCacheRange_PoC(start:usize,end:usize,pstart: usize){
-    
-}
+pub fn cleanCacheRange_PoC(start: usize, end: usize, pstart: usize) {}
 
-pub fn plat_cleanL2Range(pstart: usize, pend: usize) {
-    
-}
+pub fn plat_cleanL2Range(pstart: usize, pend: usize) {}
 
 fn LOC(x: usize) -> usize {
     (x >> 24) & MASK!(3)

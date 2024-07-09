@@ -4,11 +4,8 @@ use core::{
 };
 
 use sel4_common::{
-    fault::lookup_fault_t,
-    sel4_config::{asidLowBits, PPTR_BASE},
-    structures::exception_t,
-    utils::convert_to_option_mut_type_ref,
-    BIT,
+    arch::config::PPTR_BASE, fault::lookup_fault_t, sel4_config::asidLowBits,
+    structures::exception_t, utils::convert_to_option_mut_type_ref, BIT,
 };
 
 use crate::pte_t;
