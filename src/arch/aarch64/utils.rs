@@ -1,10 +1,10 @@
 use sel4_common::{
     arch::config::{KERNEL_ELF_BASE_OFFSET, PPTR_BASE_OFFSET},
+    plus_define_bitfield,
     sel4_config::*,
     MASK,
 };
 
-use crate::pte_t;
 pub const KPT_LEVELS: usize = 4;
 pub const seL4_VSpaceIndexBits: usize = 9;
 #[inline]
@@ -55,4 +55,28 @@ pub fn pptr_to_paddr(x: usize) -> usize {
 #[inline]
 pub fn paddr_to_pptr(x: usize) -> usize {
     x + PPTR_BASE_OFFSET
+}
+
+plus_define_bitfield! {
+    pgde_t, 1, 0, 0, 0 => {
+        new_pud, 0 => {
+            pud_base_address, get_pud_base_address, set_pud_base_address, 0, 12, 36, 0, false
+        }
+    }
+}
+
+plus_define_bitfield! {
+    pude_t, 1, 0, 0, 0 => {
+        new_pd, 0 => {
+            pud_base_address, get_pud_base_address, set_pud_base_address, 0, 12, 36, 0, false
+        }
+    }
+}
+
+plus_define_bitfield! {
+    pde_t, 1, 0, 0, 0 => {
+        new_small, 0 => {
+            pud_base_address, get_pud_base_address, set_pud_base_address, 0, 12, 36, 0, false
+        }
+    }
 }
