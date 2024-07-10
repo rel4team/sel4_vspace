@@ -1,5 +1,5 @@
 use crate::{pte_t, vm_attributes_t};
-use sel4_common::{plus_define_bitfield, structures::exception_t};
+use sel4_common::structures::exception_t;
 
 impl vm_attributes_t {
     pub fn get_armExecuteNever(&self) -> bool {

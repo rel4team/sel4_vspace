@@ -295,4 +295,26 @@ impl pte_t {
         };
         ret
     }
+    pub fn pte_new(
+        UXN: usize,
+        page_base_address: usize,
+        nG: usize,
+        AF: usize,
+        SH: usize,
+        AP: usize,
+        AttrIndx: usize,
+        reserved: usize,
+    ) -> pte_t {
+        let val = 0
+            | (UXN & 0x1) << 54
+            | (page_base_address & 0xfffffffff000) >> 0
+            | (nG & 0x1) << 11
+            | (AF & 0x1) << 10
+            | (SH & 0x3) << 8
+            | (AP & 0x3) << 6
+            | (AttrIndx & 0x7) << 2
+            | (reserved & 0x3) << 0;
+
+        pte_t(val)
+    }
 }

@@ -6,6 +6,7 @@
 #![feature(core_intrinsics)]
 mod arch;
 mod asid;
+mod boot;
 pub mod interface;
 mod pagetable;
 mod pte;
@@ -17,6 +18,7 @@ pub use arch::aarch64::*;
 #[cfg(target_arch = "riscv64")]
 pub use arch::riscv64::*;
 pub use asid::*;
+pub use boot::*;
 pub use interface::unmapPage;
 pub use pagetable::PageTable;
 pub use pte::pte_t;
