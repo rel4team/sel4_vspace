@@ -6,15 +6,13 @@ use crate::{
     ap_from_vm_rights, asid_t, findVSpaceForASID, pptr_t, pptr_to_paddr, pte_t, vm_attributes_t,
     vptr_t, PDE, PGDE, PUDE, TCB_PTR_CTE_PTR,
 };
+use sel4_common::arch::config::PPTR_BASE;
 use sel4_common::structures::exception_t;
 use sel4_common::utils::convert_to_type_ref;
 use sel4_common::{
-    arch::{
-        config::{PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_TOP},
-        vm_rights_t,
-    },
+    arch::vm_rights_t,
     fault::lookup_fault_t,
-    sel4_config::{seL4_LargePageBits, seL4_PageBits, tcbVTable, PT_INDEX_BITS},
+    sel4_config::{seL4_PageBits, tcbVTable, PT_INDEX_BITS},
     BIT,
 };
 use sel4_cspace::{arch::CapTag, interface::cap_t};
@@ -67,48 +65,6 @@ pub(crate) static mut armKSGlobalUserVSpace: PageAligned<pte_t> = PageAligned::n
 #[no_mangle]
 #[link_section = ".page_table"]
 pub(crate) static mut armKSGlobalKernelPT: PageAligned<pte_t> = PageAligned::new(pte_t(0));
-
-#[no_mangle]
-pub fn rust_map_kernel_window() {
-    unsafe {
-        armKSGlobalKernelPGD[GET_KPT_INDEX(PPTR_BASE, 0)] =
-            pte_t::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPUD.as_ptr() as usize), true);
-    }
-
-    let mut idx = GET_KPT_INDEX(PPTR_BASE, 1);
-    while idx < GET_KPT_INDEX(PPTR_TOP, 1) {
-        unsafe {
-            armKSGlobalKernelPUD[idx] = pte_t::pte_next_table(
-                kpptr_to_paddr(armKSGlobalKernelPDs[idx].as_ptr() as usize),
-                true,
-            );
-        }
-        idx += 1;
-    }
-
-    let mut vaddr = PPTR_BASE;
-    let mut paddr = PADDR_BASE;
-    while paddr < PADDR_TOP {
-        unsafe {
-            let flag = PTEFlags::UXN | PTEFlags::AF | PTEFlags::NORMAL;
-            armKSGlobalKernelPDs[GET_KPT_INDEX(vaddr, 1)][GET_KPT_INDEX(vaddr, 2)] =
-                pte_t::new(paddr, flag);
-            vaddr += BIT!(seL4_LargePageBits);
-            paddr += BIT!(seL4_LargePageBits)
-        }
-    }
-
-    unsafe {
-        armKSGlobalKernelPUD[GET_KPT_INDEX(PPTR_TOP, 1)] = pte_t::pte_next_table(
-            kpptr_to_paddr(armKSGlobalKernelPDs[BIT!(PT_INDEX_BITS) - 1].as_ptr() as usize),
-            true,
-        );
-        armKSGlobalKernelPDs[BIT!(PT_INDEX_BITS) - 1][BIT!(PT_INDEX_BITS) - 1] =
-            pte_t::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPT.as_ptr() as usize), true);
-    }
-
-    //FIXME:: map_kernel_window not implemented;
-}
 
 /// 根据给定的`vspace_root`设置相应的页表，会检查`vspace_root`是否合法，如果不合法默认设置为内核页表
 ///

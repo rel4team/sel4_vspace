@@ -1,11 +1,21 @@
 use sel4_common::{
-    arch::vm_rights_t,
-    sel4_config::{ARM_Large_Page, ARM_Small_Page},
-    utils::convert_to_mut_type_ref,
+    arch::{
+        config::{PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_TOP},
+        vm_rights_t,
+    },
+    sel4_config::{seL4_LargePageBits, ARM_Large_Page, ARM_Small_Page, PT_INDEX_BITS},
+    utils::{convert_to_mut_type_ptr, convert_to_mut_type_ref},
+    BIT,
 };
 use sel4_cspace::arch::cap_t;
 
-use crate::{arch::VAddr, asid_t, pptr_t, pptr_to_paddr, pte_t, vptr_t, PDE, PGDE, PTE, PUDE};
+use crate::{
+    arch::{aarch64::utils::GET_PGD_INDEX, VAddr}, asid_t, kpptr_to_paddr, paddr_to_pptr, pde_t, pgde_t, pptr_t, pptr_to_paddr, pte_t, pude_t, vm_attributes_t, vptr_t, PTEFlags, GET_KPT_INDEX, GET_PD_INDEX, GET_PT_INDEX, GET_UPUD_INDEX, PDE, PGDE, PTE, PUDE
+};
+
+use super::interface::{
+    armKSGlobalKernelPDs, armKSGlobalKernelPGD, armKSGlobalKernelPT, armKSGlobalKernelPUD,
+};
 
 use super::page_slice;
 
@@ -17,6 +27,89 @@ enum find_type {
 }
 
 /// TODO: Write the comments.
+pub(crate) enum mair_types {
+    DEVICE_nGnRnE = 0,
+    DEVICE_nGnRE = 1,
+    DEVICE_GRE = 2,
+    NORMAL_NC = 3,
+    NORMAL = 4,
+    NORMAL_WT = 5,
+}
+
+pub const RESERVED: usize = 0;
+
+#[no_mangle]
+#[link_section = ".boot.text"]
+pub fn rust_map_kernel_window() {
+    unsafe {
+        armKSGlobalKernelPGD[GET_KPT_INDEX(PPTR_BASE, 0)] =
+            pte_t::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPUD.as_ptr() as usize), true);
+    }
+
+    let mut idx = GET_KPT_INDEX(PPTR_BASE, 1);
+    while idx < GET_KPT_INDEX(PPTR_TOP, 1) {
+        unsafe {
+            armKSGlobalKernelPUD[idx] = pte_t::pte_next_table(
+                kpptr_to_paddr(armKSGlobalKernelPDs[idx].as_ptr() as usize),
+                true,
+            );
+        }
+        idx += 1;
+    }
+
+    let mut vaddr = PPTR_BASE;
+    let mut paddr = PADDR_BASE;
+    while paddr < PADDR_TOP {
+        unsafe {
+            let flag = PTEFlags::UXN | PTEFlags::AF | PTEFlags::NORMAL;
+            armKSGlobalKernelPDs[GET_KPT_INDEX(vaddr, 1)][GET_KPT_INDEX(vaddr, 2)] =
+                pte_t::new(paddr, flag);
+            vaddr += BIT!(seL4_LargePageBits);
+            paddr += BIT!(seL4_LargePageBits)
+        }
+    }
+
+    unsafe {
+        armKSGlobalKernelPUD[GET_KPT_INDEX(PPTR_TOP, 1)] = pte_t::pte_next_table(
+            kpptr_to_paddr(armKSGlobalKernelPDs[BIT!(PT_INDEX_BITS) - 1].as_ptr() as usize),
+            true,
+        );
+        armKSGlobalKernelPDs[BIT!(PT_INDEX_BITS) - 1][BIT!(PT_INDEX_BITS) - 1] =
+            pte_t::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPT.as_ptr() as usize), true);
+    }
+}
+
+#[no_mangle]
+pub fn map_kernel_frame(
+    paddr: usize,
+    vaddr: usize,
+    vm_rights: vm_rights_t,
+    attributes: vm_attributes_t,
+) {
+    let uxn = 1;
+    let attr_index: usize;
+    let shareable: usize;
+    if attributes.get_page_cacheable() != 0 {
+        attr_index = mair_types::NORMAL as usize;
+        shareable = 0;
+    } else {
+        attr_index = mair_types::DEVICE_nGnRnE as usize;
+        shareable = 0;
+    }
+    unsafe {
+        armKSGlobalKernelPT[GET_PT_INDEX(vaddr)] = pte_t::pte_new(
+            uxn,
+            paddr,
+            0,
+            1,
+            shareable,
+            pte_t::ap_from_vm_rights_t(vm_rights).bits() >> 6,
+            attr_index,
+            RESERVED,
+        )
+    }
+}
+
 #[no_mangle]
 #[link_section = ".boot.text"]
 pub fn map_it_pt_cap(vspace_cap: &cap_t, pt_cap: &cap_t) {

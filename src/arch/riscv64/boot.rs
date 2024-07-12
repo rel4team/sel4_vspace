@@ -5,7 +5,7 @@ use sel4_common::{
 };
 use sel4_cspace::arch::cap_t;
 
-use crate::{pptr_to_paddr, pte_t, sfence, PTEFlags};
+use crate::{pptr_t, pptr_to_paddr, pte_t, sfence, PTEFlags};
 
 #[no_mangle]
 #[link_section = ".boot.text"]
@@ -61,4 +61,8 @@ pub fn create_mapped_it_frame_cap(
     );
     map_it_frame_cap(pd_cap, &cap);
     cap
+}
+
+pub fn create_unmapped_it_frame_cap(pptr: pptr_t, _use_large: bool) -> cap_t {
+    cap_t::new_frame_cap(0, pptr, 0, 0, 0, 0)
 }
