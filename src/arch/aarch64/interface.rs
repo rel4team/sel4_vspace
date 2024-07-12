@@ -1,22 +1,14 @@
-use core::{
-    intrinsics::unlikely,
-    ops::{Deref, DerefMut},
-};
+use core::ops::{Deref, DerefMut};
 
 use super::{machine::*, pte::PTEFlags};
-use crate::{asid_t, find_vspace_for_asid, pptr_t, pptr_to_paddr, pte_t, vptr_t};
+use crate::{asid_t, pptr_to_paddr, pte_t, vptr_t};
 use sel4_common::{
-    arch::{
-        config::{KERNEL_ELF_BASE_OFFSET, PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_TOP},
-        vm_rights_t,
-    },
+    arch::config::{PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_TOP},
     fault::lookup_fault_t,
-    sel4_config::{asidInvalid, seL4_LargePageBits, ARM_Large_Page, ARM_Small_Page, PT_INDEX_BITS},
-    structures::exception_t,
-    utils::convert_to_mut_type_ref,
+    sel4_config::{seL4_LargePageBits, PT_INDEX_BITS},
     BIT,
 };
-use sel4_cspace::interface::{cap_t, CapTag};
+use sel4_cspace::interface::cap_t;
 
 use super::utils::{kpptr_to_paddr, GET_KPT_INDEX};
 
@@ -112,40 +104,32 @@ pub fn rust_map_kernel_window() {
     //FIXME:: map_kernel_window not implemented;
 }
 
-///根据给定的`vspace_root`设置相应的页表，会检查`vspace_root`是否合法，如果不合法默认设置为内核页表
+/// 根据给定的`vspace_root`设置相应的页表，会检查`vspace_root`是否合法，如果不合法默认设置为内核页表
 ///
 /// Use page table in vspace_root to set the satp register.
 pub fn set_vm_root(vspace_root: &cap_t) -> Result<(), lookup_fault_t> {
-    if vspace_root.get_cap_type() != CapTag::CapPageTableCap {
-        unsafe {
-            setCurrentUserVSpaceRoot(ttbr_new(
-                0,
-                kpptr_to_paddr(armKSGlobalUserVSpace.as_ptr() as usize),
-            ));
-            return Ok(());
+    // TODO: Implement the vspace_root check like sel4 below.
+    /*
+        cap_t threadRoot;
+        asid_t asid;
+        vspace_root_t *vspaceRoot;
+        findVSpaceForASID_ret_t find_ret;
+        threadRoot = TCB_PTR_CTE_PTR(tcb, tcbVTable)->cap;
+        if (!isValidNativeRoot(threadRoot)) {
+            setCurrentUserVSpaceRoot(ttbr_new(0, addrFromKPPtr(armKSGlobalUserVSpace)));
+            return;
         }
-    }
-    let lvl1pt = convert_to_mut_type_ref::<pte_t>(vspace_root.get_pt_base_ptr());
-    let asid = vspace_root.get_pt_mapped_asid();
-    let find_ret = find_vspace_for_asid(asid);
-    let mut ret = Ok(());
-    if unlikely(
-        find_ret.status != exception_t::EXCEPTION_NONE
-            || find_ret.vspace_root.is_none()
-            || find_ret.vspace_root.unwrap() != lvl1pt,
-    ) {
-        unsafe {
-            if let Some(lookup_fault) = find_ret.lookup_fault {
-                ret = Err(lookup_fault);
-            }
-            setCurrentUserVSpaceRoot(ttbr_new(
-                0,
-                kpptr_to_paddr(armKSGlobalUserVSpace.as_ptr() as usize),
-            ));
+        vspaceRoot = VSPACE_PTR(cap_vtable_root_get_basePtr(threadRoot));
+        asid = cap_vtable_root_get_mappedASID(threadRoot);
+        find_ret = findVSpaceForASID(asid);
+        if (unlikely(find_ret.status != EXCEPTION_NONE || find_ret.vspace_root != vspaceRoot)) {
+            setCurrentUserVSpaceRoot(ttbr_new(0, addrFromKPPtr(armKSGlobalUserVSpace)));
+            return;
         }
-    }
-    setCurrentUserVSpaceRoot(ttbr_new(asid, pptr_to_paddr(lvl1pt as *mut pte_t as usize)));
-    ret
+        armv_contextSwitch(vspaceRoot, asid);
+    */
+    setCurrentUserVSpaceRoot(pptr_to_paddr(vspace_root.get_pgd_base_ptr()));
+    Ok(())
 }
 
 pub fn activate_kernel_window() {

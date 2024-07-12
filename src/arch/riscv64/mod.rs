@@ -1,10 +1,10 @@
+mod boot;
 mod interface;
 mod pagetable;
 mod pte;
 mod satp;
 mod structures;
 mod utils;
-mod boot;
 pub use boot::*;
 pub use interface::set_vm_root;
 pub use pagetable::{activate_kernel_vspace, copyGlobalMappings, rust_map_kernel_window};

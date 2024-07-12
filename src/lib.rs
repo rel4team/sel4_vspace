@@ -3,6 +3,7 @@
 #![allow(internal_features)]
 #![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]
+#![feature(decl_macro)]
 #![feature(core_intrinsics)]
 mod arch;
 mod asid;

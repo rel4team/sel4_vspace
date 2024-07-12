@@ -10,6 +10,8 @@ pub fn setCurrentKernelVSpaceRoot(val: usize) {
 #[inline]
 pub fn setCurrentUserVSpaceRoot(val: usize) {
     TTBR0_EL1.set(val as _);
+    // FIXME: use aisd instead of flush tlb
+    unsafe { core::arch::asm!("tlbi vmalle1; dsb sy; isb") };
 }
 
 #[inline]
@@ -69,9 +71,8 @@ pub fn dmb() {
     }
 }
 
-// cache
-
-fn LOUU(x: usize) -> usize {
+// TIPS: please use const to make code cleaner and faster.
+pub const fn LOUU(x: usize) -> usize {
     (x >> 27) & MASK!(3)
 }
 

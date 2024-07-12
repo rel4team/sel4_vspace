@@ -1,4 +1,8 @@
-use sel4_common::{arch::vm_rights_t, sel4_config::{seL4_PageBits, RISCVMegaPageBits, RISCVPageBits}, utils::convert_to_mut_type_ref};
+use sel4_common::{
+    arch::vm_rights_t,
+    sel4_config::{seL4_PageBits, RISCVMegaPageBits, RISCVPageBits},
+    utils::convert_to_mut_type_ref,
+};
 use sel4_cspace::arch::cap_t;
 
 use crate::{pptr_to_paddr, pte_t, sfence, PTEFlags};
