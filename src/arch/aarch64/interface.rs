@@ -1,8 +1,10 @@
 use core::ops::{Deref, DerefMut};
 
+use super::utils::{kpptr_to_paddr, GET_KPT_INDEX};
 use super::{machine::*, pte::PTEFlags};
 use crate::{
     ap_from_vm_rights, asid_t, pptr_t, pptr_to_paddr, pte_t, vm_attributes_t, vptr_t, PDE, PUDE,
+    TCB_PTR_CTE_PTR,
 };
 use sel4_common::{
     arch::{
@@ -10,13 +12,10 @@ use sel4_common::{
         vm_rights_t,
     },
     fault::lookup_fault_t,
-    sel4_config::{seL4_LargePageBits, PT_INDEX_BITS},
+    sel4_config::{seL4_LargePageBits, tcbVTable, PT_INDEX_BITS},
     BIT,
 };
-use sel4_cspace::interface::cap_t;
-
-use super::utils::{kpptr_to_paddr, GET_KPT_INDEX};
-
+use sel4_cspace::{arch::CapTag, interface::cap_t};
 pub const PageAlignedLen: usize = BIT!(PT_INDEX_BITS);
 #[repr(align(4096))]
 #[derive(Clone, Copy)]
@@ -245,4 +244,23 @@ pub fn makeUser3rdLevel(
         mair_types::DEVICE_nGnRnE as usize,
         3, // RESERVED
     )
+}
+
+pub fn setVMRootForFlush(vspace: usize, asid: asid_t) -> bool {
+    extern "C" {
+        fn ksCurThread(); // from sel4 task
+    }
+
+    let threadRoot = unsafe { (*TCB_PTR_CTE_PTR(ksCurThread as usize, tcbVTable)).cap };
+
+    if threadRoot.get_cap_type() == CapTag::CapPageGlobalDirectoryCap
+        && threadRoot.get_pgd_is_mapped() > 0
+        && threadRoot.get_pgd_base_ptr() == vspace
+    {
+        return false;
+    }
+
+    // armv_context_switch(vspace, asid);
+    setCurrentUserVSpaceRoot(ttbr_new(asid, vspace));
+    return true;
 }

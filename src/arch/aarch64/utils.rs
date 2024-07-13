@@ -7,6 +7,7 @@ use sel4_common::{
     utils::convert_to_mut_slice,
     MASK,
 };
+use sel4_cspace::interface::cte_t;
 
 use crate::arch::VAddr;
 
@@ -104,6 +105,11 @@ pub fn ap_from_vm_rights(rights: vm_rights_t) -> usize {
     //     vm_rights_t::VMReadOnly => 3,
     // }
     rights as usize
+}
+
+/* Generate a cte_t pointer from a tcb_t pointer */
+pub fn TCB_PTR_CTE_PTR(p: usize, i: usize) -> *mut cte_t {
+    ((p & !MASK!(seL4_TCBBits)) + i) as _
 }
 
 #[repr(C)]
