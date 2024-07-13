@@ -1,9 +1,14 @@
 use core::ops::{Deref, DerefMut};
 
 use super::{machine::*, pte::PTEFlags};
-use crate::{asid_t, pptr_to_paddr, pte_t, vptr_t};
+use crate::{
+    ap_from_vm_rights, asid_t, pptr_t, pptr_to_paddr, pte_t, vm_attributes_t, vptr_t, PDE, PUDE,
+};
 use sel4_common::{
-    arch::config::{PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_TOP},
+    arch::{
+        config::{PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_TOP},
+        vm_rights_t,
+    },
     fault::lookup_fault_t,
     sel4_config::{seL4_LargePageBits, PT_INDEX_BITS},
     BIT,
@@ -156,4 +161,88 @@ pub fn activate_kernel_vspace() {
         invalidate_local_tlb();
         /* A53 hardware does not support TLB locking */
     }
+}
+
+pub fn makeUser1stLevel(
+    paddr: pptr_t,
+    vm_rights: vm_rights_t,
+    attributes: vm_attributes_t,
+) -> PUDE {
+    let uxn = attributes.get_armExecuteNever();
+    if attributes.get_armPageCacheable() {
+        return PUDE::new_1g(
+            uxn as usize,
+            paddr,
+            1,
+            1,
+            0,
+            ap_from_vm_rights(vm_rights),
+            mair_types::NORMAL as usize,
+        );
+    }
+
+    return PUDE::new_1g(
+        uxn as usize,
+        paddr,
+        1,
+        1,
+        0,
+        ap_from_vm_rights(vm_rights),
+        mair_types::DEVICE_nGnRnE as usize,
+    );
+}
+
+pub fn makeUser2ndLevel(paddr: pptr_t, vm_rights: vm_rights_t, attributes: vm_attributes_t) -> PDE {
+    let uxn = attributes.get_armExecuteNever();
+    if attributes.get_armPageCacheable() {
+        return PDE::new_large(
+            uxn as usize,
+            paddr,
+            1,
+            1,
+            0,
+            ap_from_vm_rights(vm_rights),
+            mair_types::NORMAL as usize,
+        );
+    }
+    PDE::new_large(
+        uxn as usize,
+        paddr,
+        1,
+        1,
+        0,
+        ap_from_vm_rights(vm_rights),
+        mair_types::DEVICE_nGnRnE as usize,
+    )
+}
+
+pub fn makeUser3rdLevel(
+    paddr: pptr_t,
+    vm_rights: vm_rights_t,
+    attributes: vm_attributes_t,
+) -> pte_t {
+    let uxn = attributes.get_armExecuteNever();
+    if attributes.get_armPageCacheable() {
+        return pte_t::pte_new(
+            uxn as usize,
+            paddr,
+            1,
+            1,
+            0,
+            ap_from_vm_rights(vm_rights),
+            mair_types::NORMAL as usize,
+            3, // RESERVED
+        );
+    }
+
+    pte_t::pte_new(
+        uxn as usize,
+        paddr,
+        1,
+        1,
+        0,
+        ap_from_vm_rights(vm_rights),
+        mair_types::DEVICE_nGnRnE as usize,
+        3, // RESERVED
+    )
 }
