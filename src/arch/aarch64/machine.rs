@@ -202,3 +202,22 @@ pub fn invalidate_local_tlb() {
     dsb();
     isb();
 }
+
+/*
+ * Memory types are defined in Memory Attribute Indirection Register.
+ *  - nGnRnE Device non-Gathering, non-Reordering, No Early write acknowledgement
+ *  - nGnRE Unused Device non-Gathering, non-Reordering, Early write acknowledgement
+ *  - GRE Unused Device Gathering, Reordering, Early write acknowledgement
+ *  - NORMAL_NC Normal Memory, Inner/Outer non-cacheable
+ *  - NORMAL Normal Memory, Inner/Outer Write-back non-transient, Write-allocate, Read-allocate
+ *  - NORMAL_WT Normal Memory, Inner/Outer Write-through non-transient, No-Write-allocate, Read-allocate
+ * Note: These should match with contents of MAIR_EL1 register!
+ */
+pub enum mair_types {
+    DEVICE_nGnRnE,
+    DEVICE_nGnRE,
+    DEVICE_GRE,
+    NORMAL_NC,
+    NORMAL,
+    NORMAL_WT,
+}

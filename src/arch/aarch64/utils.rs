@@ -1,5 +1,8 @@
 use sel4_common::{
-    arch::config::{KERNEL_ELF_BASE_OFFSET, PPTR_BASE_OFFSET},
+    arch::{
+        config::{KERNEL_ELF_BASE_OFFSET, PPTR_BASE_OFFSET},
+        vm_rights_t,
+    },
     sel4_config::*,
     utils::convert_to_mut_slice,
     MASK,
@@ -94,6 +97,15 @@ pub(super) fn page_slice<T>(addr: usize) -> &'static mut [T] {
     convert_to_mut_slice::<T>(addr, 0x200)
 }
 
+pub fn ap_from_vm_rights(rights: vm_rights_t) -> usize {
+    // match rights {
+    //     vm_rights_t::VMKernelOnly => 0,
+    //     vm_rights_t::VMReadWrite => 1,
+    //     vm_rights_t::VMReadOnly => 3,
+    // }
+    rights as usize
+}
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct PGDE(usize);
@@ -168,5 +180,53 @@ impl_multi!(PGDE, PUDE, PDE, PTE {
     #[inline]
     pub const fn new(addr: usize, sign: usize) -> Self {
         Self((addr & PAGE_ADDR_MASK) | (sign & !PAGE_ADDR_MASK))
+    }
+});
+
+impl_multi!(PUDE {
+    #[inline]
+    pub const fn new_1g(
+        uxn: usize,
+        page_base_address: usize,
+        ng: usize,
+        af: usize,
+        sh: usize,
+        ap: usize,
+        attr_index: usize
+    ) -> Self {
+        Self(
+            (uxn & 0x1) << 54
+            | (page_base_address & 0xffffc0000000)
+            | (ng & 0x1) << 11
+            | (af & 0x1) << 10
+            | (sh & 0x1) << 8
+            | (ap & 0x1) << 6
+            | (attr_index & 0x7) << 2
+            | 0x1, // pude_1g_tag
+        )
+    }
+});
+
+impl_multi!(PDE {
+    #[inline]
+    pub const fn new_large(
+        uxn: usize,
+        page_base_address: usize,
+        ng: usize,
+        af: usize,
+        sh: usize,
+        ap: usize,
+        attr_index: usize
+    ) -> Self {
+        Self(
+            (uxn & 0x1) << 54
+            | (page_base_address & 0xffffffe00000)
+            | (ng & 0x1) << 11
+            | (af & 0x1) << 10
+            | (sh & 0x1) << 8
+            | (ap & 0x1) << 6
+            | (attr_index & 0x7) << 2
+            | 0x1,  // pde_large_tag
+        )
     }
 });
