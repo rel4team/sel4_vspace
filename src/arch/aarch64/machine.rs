@@ -56,6 +56,16 @@ pub fn invalidate_local_tlb_asid(asid: usize) {
     isb();
 }
 
+#[inline]
+pub fn invalidate_local_tlb_va_asid(mva_plus_asid: usize) {
+    dsb();
+    unsafe {
+        asm!("tlbi vae1, {}", in(reg) mva_plus_asid);
+    }
+    dsb();
+    isb();
+}
+
 #[inline(always)]
 pub fn clean_by_va_pou(vaddr: usize, _paddr: usize) {
     unsafe {

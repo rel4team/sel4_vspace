@@ -3,16 +3,18 @@ use core::ops::{Deref, DerefMut};
 use super::utils::{kpptr_to_paddr, GET_KPT_INDEX};
 use super::{machine::*, pte::PTEFlags};
 use crate::{
-    ap_from_vm_rights, asid_t, pptr_t, pptr_to_paddr, pte_t, vm_attributes_t, vptr_t, PDE, PUDE,
-    TCB_PTR_CTE_PTR,
+    ap_from_vm_rights, asid_t, findVSpaceForASID, pptr_t, pptr_to_paddr, pte_t, vm_attributes_t,
+    vptr_t, PDE, PGDE, PUDE, TCB_PTR_CTE_PTR,
 };
+use sel4_common::structures::exception_t;
+use sel4_common::utils::convert_to_type_ref;
 use sel4_common::{
     arch::{
         config::{PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_TOP},
         vm_rights_t,
     },
     fault::lookup_fault_t,
-    sel4_config::{seL4_LargePageBits, tcbVTable, PT_INDEX_BITS},
+    sel4_config::{seL4_LargePageBits, seL4_PageBits, tcbVTable, PT_INDEX_BITS},
     BIT,
 };
 use sel4_cspace::{arch::CapTag, interface::cap_t};
@@ -263,4 +265,83 @@ pub fn setVMRootForFlush(vspace: usize, asid: asid_t) -> bool {
     // armv_context_switch(vspace, asid);
     setCurrentUserVSpaceRoot(ttbr_new(asid, vspace));
     return true;
+}
+
+pub fn pageUpperDirectoryMapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> Option<*mut pte_t> {
+    let find_ret = findVSpaceForASID(asid);
+    if find_ret.status != exception_t::EXCEPTION_NONE {
+        return None;
+    }
+
+    let lu_ret =
+        convert_to_type_ref::<pte_t>(find_ret.vspace_root.unwrap() as usize).lookup_pgd_slot(vaddr);
+
+    if lu_ret.status != exception_t::EXCEPTION_NONE {
+        return None;
+    }
+
+    let pgde = unsafe { (*lu_ret.pgdSlot).as_pgde() };
+    if pgde.pud_ptr_get_present()
+        && pgde.get_pud_base_address() == pptr_to_paddr(pud as *const PUDE as usize)
+    {
+        return Some(lu_ret.pgdSlot);
+    }
+
+    None
+}
+
+pub fn pageDirectoryMapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*mut pte_t> {
+    let find_ret = findVSpaceForASID(asid);
+    if find_ret.status != exception_t::EXCEPTION_NONE {
+        return None;
+    }
+
+    let lu_ret =
+        convert_to_type_ref::<pte_t>(find_ret.vspace_root.unwrap() as usize).lookup_pud_slot(vaddr);
+
+    if lu_ret.status != exception_t::EXCEPTION_NONE {
+        return None;
+    }
+
+    let pude = unsafe { (*lu_ret.pudSlot).as_pude() };
+    if pude.pd_ptr_get_present()
+        && pude.get_pd_base_address() == pptr_to_paddr(pd as *const PDE as usize)
+    {
+        return Some(lu_ret.pudSlot);
+    }
+
+    None
+}
+
+pub fn pageTableMapped(asid: asid_t, vaddr: vptr_t, pt: &pte_t) -> Option<*mut pte_t> {
+    let find_ret = findVSpaceForASID(asid);
+    if find_ret.status != exception_t::EXCEPTION_NONE {
+        return None;
+    }
+
+    let lu_ret =
+        convert_to_type_ref::<pte_t>(find_ret.vspace_root.unwrap() as usize).lookup_pd_slot(vaddr);
+
+    if lu_ret.status != exception_t::EXCEPTION_NONE {
+        return None;
+    }
+
+    let pde = unsafe { (*lu_ret.pdSlot).as_pde() };
+    if pde.small_ptr_get_present()
+        && pde.small_ptr_get_pt_base_address() == pptr_to_paddr(pt as *const pte_t as usize)
+    {
+        return Some(lu_ret.pdSlot);
+    }
+
+    None
+}
+
+#[inline]
+pub fn invalidateTLBByASID(asid: asid_t) {
+    invalidate_local_tlb_asid(asid);
+}
+
+#[inline]
+pub fn invalidateTLBByASIDVA(asid: asid_t, vaddr: vptr_t) {
+    invalidate_local_tlb_va_asid((asid << 48) | vaddr >> seL4_PageBits);
 }

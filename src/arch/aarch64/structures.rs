@@ -1,6 +1,8 @@
 use crate::{pte_t, vm_attributes_t};
 use sel4_common::structures::exception_t;
 
+pub type hw_asid_t = u8;
+
 impl vm_attributes_t {
     pub fn get_armExecuteNever(&self) -> bool {
         if (self.0 & 0x4) != 0 {
