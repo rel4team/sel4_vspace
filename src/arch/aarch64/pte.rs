@@ -25,7 +25,7 @@ use sel4_common::{
 
 use super::utils::{paddr_to_pptr, GET_UPT_INDEX};
 
-enum vm_page_size {
+pub enum vm_page_size {
     ARMSmallPage,
     ARMLargePage,
     ARMHugePage,

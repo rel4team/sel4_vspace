@@ -152,6 +152,11 @@ impl_multi!(PGDE, PUDE, PDE {
 });
 
 impl_multi!(PGDE, PUDE, PDE, PTE {
+    #[inline]
+    pub fn get_ptr(&self) -> usize {
+        self as *const Self as usize
+    }
+
     /// Get the next level paddr
     #[inline]
     pub const fn next_level_paddr(&self) -> usize {
@@ -195,6 +200,11 @@ impl_multi!(PGDE, PUDE, PDE, PTE {
     #[inline]
     pub const fn new_from_pte(word: usize) -> Self {
         Self(word)
+    }
+
+    #[inline]
+    pub fn invalidate(&mut self) {
+        self.0 = 0;
     }
 });
 
@@ -303,11 +313,6 @@ impl_multi!(PDE {
 });
 
 impl_multi!(PTE{
-    #[inline]
-    pub fn get_ptr(&self) -> usize {
-        self as *const Self as usize
-    }
-
     #[inline]
     pub const fn get_reserved(&self) -> usize {
         self.0 & 0x3
