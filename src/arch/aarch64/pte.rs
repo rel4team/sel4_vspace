@@ -133,7 +133,7 @@ impl PTE {
         PDE::new_from_pte(self.0)
     }
 
-    pub fn is_PTEable(&self) -> bool {
+    pub fn is_pte_table(&self) -> bool {
         self.get_type() != PTEag_t::PTEable as usize
     }
     pub fn get_valid(&self) -> usize {
