@@ -7,6 +7,7 @@ use sel4_common::{
     utils::convert_to_mut_slice,
     MASK,
 };
+use sel4_cspace::interface::cte_t;
 
 use crate::arch::VAddr;
 
@@ -106,6 +107,11 @@ pub fn ap_from_vm_rights(rights: vm_rights_t) -> usize {
     rights as usize
 }
 
+/* Generate a cte_t pointer from a tcb_t pointer */
+pub fn TCB_PTR_CTE_PTR(p: usize, i: usize) -> *mut cte_t {
+    ((p & !MASK!(seL4_TCBBits)) + i) as _
+}
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct PGDE(usize);
@@ -181,6 +187,28 @@ impl_multi!(PGDE, PUDE, PDE, PTE {
     pub const fn new(addr: usize, sign: usize) -> Self {
         Self((addr & PAGE_ADDR_MASK) | (sign & !PAGE_ADDR_MASK))
     }
+
+    #[inline]
+    pub const fn new_from_pte(word: usize) -> Self {
+        Self(word)
+    }
+});
+
+impl_multi!(PGDE {
+    #[inline]
+    pub const fn get_pgde_type(&self) -> usize {
+        self.0 & 0x3
+    }
+
+    #[inline]
+    pub const fn pud_ptr_get_present(&self) -> bool {
+        self.get_pgde_type() == 3 // pgde_pgde_pud
+    }
+
+    #[inline]
+    pub const fn get_pud_base_address(&self) -> usize {
+        self.0 & 0xfffffffff000
+    }
 });
 
 impl_multi!(PUDE {
@@ -205,6 +233,21 @@ impl_multi!(PUDE {
             | 0x1, // pude_1g_tag
         )
     }
+
+    #[inline]
+    pub const fn get_pude_type(&self) -> usize {
+        self.0 & 0x3
+    }
+
+    #[inline]
+    pub const fn pd_ptr_get_present(&self) -> bool {
+        self.get_pude_type() == 3 // pude_pude_pd
+    }
+
+    #[inline]
+    pub const fn get_pd_base_address(&self) -> usize {
+        self.0 & 0xfffffffff000
+    }
 });
 
 impl_multi!(PDE {
@@ -228,5 +271,20 @@ impl_multi!(PDE {
             | (attr_index & 0x7) << 2
             | 0x1,  // pde_large_tag
         )
+    }
+
+    #[inline]
+    pub const fn get_pde_type(&self) -> usize {
+        self.0 & 0x3
+    }
+
+    #[inline]
+    pub const fn small_ptr_get_present(&self) -> bool {
+        self.get_pde_type() == 3 // pde_pde_small
+    }
+
+    #[inline]
+    pub const fn small_ptr_get_pt_base_address(&self) -> usize {
+        self.0 & 0xfffffffff000
     }
 });
