@@ -2,7 +2,7 @@
 use crate::arch::pptr_to_paddr;
 #[cfg(target_arch = "riscv64")]
 use crate::arch::riscv64::sfence;
-use crate::{asid_t, find_vspace_for_asid, pptr_t, pte_t, vptr_t};
+use crate::{asid_t, find_vspace_for_asid, pptr_t, PTE, vptr_t};
 use sel4_common::fault::lookup_fault_t;
 use sel4_common::sel4_config::seL4_PageBits;
 use sel4_common::structures::exception_t;
@@ -38,9 +38,9 @@ pub fn unmapPage(
 
     unsafe {
         let pte_ptr = lu_ret.ptSlot as *mut usize;
-        let slot = pte_t(*pte_ptr);
+        let slot = PTE(*pte_ptr);
         if slot.get_valid() == 0
-            || slot.is_pte_table()
+            || slot.is_PTEable()
             || slot.get_ppn() << seL4_PageBits != pptr_to_paddr(pptr)
         {
             return Ok(());

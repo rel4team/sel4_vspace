@@ -120,10 +120,14 @@ pub struct PGDE(usize);
 pub struct PUDE(usize);
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct PDE(usize);
+pub struct PDE(pub usize);
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct PTE(pub usize);
+
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct PTE(usize);
+pub struct ASID(usize);
 
 /// Implemente generic function for given Ident
 #[macro_export]
@@ -184,8 +188,14 @@ impl_multi!(PGDE, PUDE, PDE, PTE {
     }
     /// Create self through addr and attributes.
     #[inline]
-    pub const fn new(addr: usize, sign: usize) -> Self {
+    pub const fn new_page(addr: usize, sign: usize) -> Self {
         Self((addr & PAGE_ADDR_MASK) | (sign & !PAGE_ADDR_MASK))
+    }
+    
+    /// Get the page's type info
+    #[inline]
+    pub const fn get_type(&self) -> usize {
+        self.0 & 0x3
     }
 
     #[inline]
@@ -245,7 +255,11 @@ impl_multi!(PUDE {
     }
 
     #[inline]
-    pub const fn get_pd_base_address(&self) -> usize {
+    pub fn pude_1g_ptr_get_page_base_address(&self) -> usize {
+        self.0 & 0xffffc0000000
+    }
+    #[inline]
+    pub fn pude_pd_ptr_get_pd_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
     }
 });
@@ -284,7 +298,34 @@ impl_multi!(PDE {
     }
 
     #[inline]
-    pub const fn small_ptr_get_pt_base_address(&self) -> usize {
+    pub const fn pde_large_ptr_get_page_base_address(&self) -> usize {
+        self.0 & 0xffffffe00000
+    }
+
+    #[inline]
+    pub const fn pde_small_ptr_get_pt_base_address(&self) -> usize {
+        self.0 & 0xfffffffff000
+    }
+});
+
+impl_multi!(PTE{
+    #[inline]
+    pub fn get_ptr(&self) -> usize {
+        self as *const Self as usize
+    }
+
+    #[inline]
+    pub const fn get_reserved(&self) -> usize {
+        self.0 & 0x3
+    }
+
+    #[inline]
+    pub const fn pte_ptr_get_present(&self) -> bool {
+        self.get_reserved() == 0x3
+    }
+
+    #[inline]
+    pub const fn pte_ptr_get_page_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
     }
 });
