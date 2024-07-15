@@ -1,4 +1,4 @@
-use crate::{paddr_t, pte_t, PageTable};
+use crate::{paddr_t, PTE, PageTable};
 use sel4_common::{
     arch::config::{
         KERNEL_ELF_BASE, KERNEL_ELF_PADDR_BASE, PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_BASE_OFFSET,
@@ -17,14 +17,14 @@ use super::{
 ///页表采用`SV39`，该变量是内核使用的页表的根页表（一级页表）
 #[no_mangle]
 #[link_section = ".page_table"]
-pub(crate) static mut kernel_root_pageTable: [pte_t; BIT!(PT_INDEX_BITS)] =
-    [pte_t::pte_invalid(); BIT!(PT_INDEX_BITS)];
+pub(crate) static mut kernel_root_pageTable: [PTE; BIT!(PT_INDEX_BITS)] =
+    [PTE::pte_invalid(); BIT!(PT_INDEX_BITS)];
 
 ///内核使用的二级页表
 #[no_mangle]
 #[link_section = ".page_table"]
-pub(crate) static mut kernel_image_level2_pt: [pte_t; BIT!(PT_INDEX_BITS)] =
-    [pte_t::pte_invalid(); BIT!(PT_INDEX_BITS)];
+pub(crate) static mut kernel_image_level2_pt: [PTE; BIT!(PT_INDEX_BITS)] =
+    [PTE::pte_invalid(); BIT!(PT_INDEX_BITS)];
 
 pub(crate) static mut KERNEL_ROOT_PAGE_TABLE: PageTable = PageTable::new(paddr_t(0));
 pub(crate) static mut KERNEL_LEVEL2_PAGE_TABLE: PageTable = PageTable::new(paddr_t(0));

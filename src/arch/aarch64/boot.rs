@@ -10,7 +10,10 @@ use sel4_common::{
 use sel4_cspace::arch::cap_t;
 
 use crate::{
-    arch::{aarch64::utils::GET_PGD_INDEX, VAddr}, asid_t, kpptr_to_paddr, paddr_to_pptr, pde_t, pgde_t, pptr_t, pptr_to_paddr, pte_t, pude_t, vm_attributes_t, vptr_t, PTEFlags, GET_KPT_INDEX, GET_PD_INDEX, GET_PT_INDEX, GET_UPUD_INDEX, PDE, PGDE, PTE, PUDE
+    arch::{aarch64::utils::GET_PGD_INDEX, VAddr},
+    asid_t, kpptr_to_paddr, paddr_to_pptr, pde_t, pgde_t, pptr_t, pptr_to_paddr, pude_t,
+    vm_attributes_t, vptr_t, PTEFlags, GET_KPT_INDEX, GET_PD_INDEX, GET_PT_INDEX, GET_UPUD_INDEX,
+    PDE, PGDE, PTE, PUDE,
 };
 
 use super::interface::{
@@ -23,7 +26,7 @@ use super::page_slice;
 enum find_type {
     pde_t,
     pude_t,
-    pte_t,
+    PTE,
 }
 
 /// TODO: Write the comments.
@@ -43,13 +46,13 @@ pub const RESERVED: usize = 0;
 pub fn rust_map_kernel_window() {
     unsafe {
         armKSGlobalKernelPGD[GET_KPT_INDEX(PPTR_BASE, 0)] =
-            pte_t::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPUD.as_ptr() as usize), true);
+            PTE::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPUD.as_ptr() as usize), true);
     }
 
     let mut idx = GET_KPT_INDEX(PPTR_BASE, 1);
     while idx < GET_KPT_INDEX(PPTR_TOP, 1) {
         unsafe {
-            armKSGlobalKernelPUD[idx] = pte_t::pte_next_table(
+            armKSGlobalKernelPUD[idx] = PTE::pte_next_table(
                 kpptr_to_paddr(armKSGlobalKernelPDs[idx].as_ptr() as usize),
                 true,
             );
@@ -63,19 +66,19 @@ pub fn rust_map_kernel_window() {
         unsafe {
             let flag = PTEFlags::UXN | PTEFlags::AF | PTEFlags::NORMAL;
             armKSGlobalKernelPDs[GET_KPT_INDEX(vaddr, 1)][GET_KPT_INDEX(vaddr, 2)] =
-                pte_t::new(paddr, flag);
+                PTE::new(paddr, flag);
             vaddr += BIT!(seL4_LargePageBits);
             paddr += BIT!(seL4_LargePageBits)
         }
     }
 
     unsafe {
-        armKSGlobalKernelPUD[GET_KPT_INDEX(PPTR_TOP, 1)] = pte_t::pte_next_table(
+        armKSGlobalKernelPUD[GET_KPT_INDEX(PPTR_TOP, 1)] = PTE::pte_next_table(
             kpptr_to_paddr(armKSGlobalKernelPDs[BIT!(PT_INDEX_BITS) - 1].as_ptr() as usize),
             true,
         );
         armKSGlobalKernelPDs[BIT!(PT_INDEX_BITS) - 1][BIT!(PT_INDEX_BITS) - 1] =
-            pte_t::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPT.as_ptr() as usize), true);
+            PTE::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPT.as_ptr() as usize), true);
     }
 }
 
@@ -97,13 +100,13 @@ pub fn map_kernel_frame(
         shareable = 0;
     }
     unsafe {
-        armKSGlobalKernelPT[GET_PT_INDEX(vaddr)] = pte_t::pte_new(
+        armKSGlobalKernelPT[GET_PT_INDEX(vaddr)] = PTE::pte_new(
             uxn,
             paddr,
             0,
             1,
             shareable,
-            pte_t::ap_from_vm_rights_t(vm_rights).bits() >> 6,
+            PTE::ap_from_vm_rights_t(vm_rights).bits() >> 6,
             attr_index,
             RESERVED,
         )
@@ -134,7 +137,7 @@ pub fn map_it_pd_cap(vspace_cap: &cap_t, pd_cap: &cap_t) {
     // TODO: move 0x3 into a proper position.
     assert_eq!(pgd[vptr.pgd_index()].attr(), 0x3);
     let pud = pgd[vptr.pgd_index()].next_level_slice::<PUDE>();
-    pud[vptr.pud_index()] = PUDE::new(pptr_to_paddr(pd_addr), 0x3);
+    pud[vptr.pud_index()] = PUDE::new_page(pptr_to_paddr(pd_addr), 0x3);
 }
 
 /// TODO: Write the comments.
@@ -145,7 +148,7 @@ pub fn map_it_pud_cap(vspace_cap: &cap_t, pud_cap: &cap_t) {
     assert_eq!(pud_cap.get_pud_is_mapped(), 1);
 
     // TODO: move 0x3 into a proper position.
-    pgd[vptr.pgd_index()] = PGDE::new(pptr_to_paddr(pud_addr), 0x3);
+    pgd[vptr.pgd_index()] = PGDE::new_page(pptr_to_paddr(pud_addr), 0x3);
 }
 
 /// TODO: Write the comments.
@@ -155,11 +158,11 @@ pub fn map_it_frame_cap(vspace_cap: &cap_t, frame_cap: &cap_t, exec: bool) {
     let pte = convert_to_mut_type_ref::<PTE>(find_pt(
         vspace_cap.get_cap_ptr(),
         frame_cap.get_frame_mapped_address().into(),
-        find_type::pte_t,
+        find_type::PTE,
     ));
     // TODO: Make set_attr usage more efficient.
     // TIPS: exec true will be cast to 1 and false to 0.
-    pte.set_attr(pte_t::pte_new((!exec) as usize, 0, 1, 1, 0, 1, 0, 3).0);
+    pte.set_attr(PTE::pte_new((!exec) as usize, 0, 1, 1, 0, 1, 0, 3).0);
     pte.set_next_level_paddr(pptr_to_paddr(frame_cap.get_frame_base_ptr()));
 }
 
@@ -176,7 +179,7 @@ fn find_pt(vspace_root: usize, vptr: VAddr, ftype: find_type) -> usize {
         return pd[vptr.pd_index()].self_addr();
     }
     let pt = pd[vptr.pd_index()].next_level_slice::<PTE>();
-    assert_eq!(ftype, find_type::pte_t);
+    assert_eq!(ftype, find_type::PTE);
     pt[vptr.pt_index()].self_addr()
 }
 

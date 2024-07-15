@@ -3,8 +3,7 @@ use core::ops::{Deref, DerefMut};
 use super::utils::{kpptr_to_paddr, GET_KPT_INDEX};
 use super::{machine::*, pte::PTEFlags};
 use crate::{
-    ap_from_vm_rights, asid_t, findVSpaceForASID, pptr_t, pptr_to_paddr, pte_t, vm_attributes_t,
-    vptr_t, PDE, PGDE, PUDE, TCB_PTR_CTE_PTR,
+    ap_from_vm_rights, asid_t, pptr_t, pptr_to_paddr, PTE, vm_attributes_t, vptr_t, PDE, PUDE,
 };
 use sel4_common::arch::config::PPTR_BASE;
 use sel4_common::structures::exception_t;
@@ -43,28 +42,28 @@ impl<T> DerefMut for PageAligned<T> {
 
 #[no_mangle]
 #[link_section = ".page_table"]
-pub(crate) static mut armKSGlobalKernelPGD: PageAligned<pte_t> = PageAligned::new(pte_t(0));
+pub(crate) static mut armKSGlobalKernelPGD: PageAligned<PTE> = PageAligned::new(PTE(0));
 
 #[no_mangle]
 #[link_section = ".page_table"]
-pub(crate) static mut armKSGlobalKernelPUD: PageAligned<pte_t> = PageAligned::new(pte_t(0));
+pub(crate) static mut armKSGlobalKernelPUD: PageAligned<PTE> = PageAligned::new(PTE(0));
 
 // #[no_mangle]
 // #[link_section = ".page_table"]
-// pub(crate) static mut armKSGlobalKernelPDs: [[pte_t; BIT!(PT_INDEX_BITS)]; BIT!(PT_INDEX_BITS)] =
-//     [[pte_t(0); BIT!(PT_INDEX_BITS)]; BIT!(PT_INDEX_BITS)];
+// pub(crate) static mut armKSGlobalKernelPDs: [[PTE; BIT!(PT_INDEX_BITS)]; BIT!(PT_INDEX_BITS)] =
+//     [[PTE(0); BIT!(PT_INDEX_BITS)]; BIT!(PT_INDEX_BITS)];
 #[no_mangle]
 #[link_section = ".page_table"]
-pub(crate) static mut armKSGlobalKernelPDs: PageAligned<PageAligned<pte_t>> =
-    PageAligned::new(PageAligned::new(pte_t(0)));
+pub(crate) static mut armKSGlobalKernelPDs: PageAligned<PageAligned<PTE>> =
+    PageAligned::new(PageAligned::new(PTE(0)));
 
 #[no_mangle]
 #[link_section = ".page_table"]
-pub(crate) static mut armKSGlobalUserVSpace: PageAligned<pte_t> = PageAligned::new(pte_t(0));
+pub(crate) static mut armKSGlobalUserVSpace: PageAligned<PTE> = PageAligned::new(PTE(0));
 
 #[no_mangle]
 #[link_section = ".page_table"]
-pub(crate) static mut armKSGlobalKernelPT: PageAligned<pte_t> = PageAligned::new(pte_t(0));
+pub(crate) static mut armKSGlobalKernelPT: PageAligned<PTE> = PageAligned::new(PTE(0));
 
 /// 根据给定的`vspace_root`设置相应的页表，会检查`vspace_root`是否合法，如果不合法默认设置为内核页表
 ///
@@ -98,7 +97,7 @@ pub fn activate_kernel_window() {
     todo!()
 }
 
-pub fn unmap_page_table(asid: asid_t, vaddr: vptr_t, pt: &mut pte_t) {
+pub fn unmap_page_table(asid: asid_t, vaddr: vptr_t, pt: &mut PTE) {
     pt.unmap_page_table(asid, vaddr);
 }
 
@@ -177,10 +176,10 @@ pub fn makeUser3rdLevel(
     paddr: pptr_t,
     vm_rights: vm_rights_t,
     attributes: vm_attributes_t,
-) -> pte_t {
+) -> PTE {
     let uxn = attributes.get_armExecuteNever();
     if attributes.get_armPageCacheable() {
-        return pte_t::pte_new(
+        return PTE::pte_new(
             uxn as usize,
             paddr,
             1,
@@ -192,7 +191,7 @@ pub fn makeUser3rdLevel(
         );
     }
 
-    pte_t::pte_new(
+    PTE::pte_new(
         uxn as usize,
         paddr,
         1,

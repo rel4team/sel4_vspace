@@ -9,7 +9,7 @@ use sel4_common::{
 };
 use sel4_cspace::arch::cap_t;
 
-use crate::{asid_pool_t, asid_t, findVSpaceForASID_ret, pptr_t, pte_t, set_vm_root};
+use crate::{asid_pool_t, asid_t, findVSpaceForASID_ret, pptr_t, PTE, set_vm_root};
 
 ///存放`asid pool`的数组，每一个下标对应一个`asid pool`，
 ///一个`asid pool`可以存放`asidLowBits`个asid值
@@ -32,7 +32,7 @@ pub fn write_it_asid_pool(it_ap_cap: &cap_t, it_lvl1pt_cap: &cap_t) {
 /// delete the asid from asid pool.
 pub fn delete_asid(
     asid: asid_t,
-    vspace: *mut pte_t,
+    vspace: *mut PTE,
     default_vspace_cap: &cap_t,
 ) -> Result<(), lookup_fault_t> {
     unsafe {
@@ -40,7 +40,7 @@ pub fn delete_asid(
         if poolPtr as usize != 0 && (*poolPtr).array[asid & MASK!(asidLowBits)] == vspace {
             #[cfg(target_arch = "riscv64")]
             hwASIDFlush(asid);
-            (*poolPtr).array[asid & MASK!(asidLowBits)] = 0 as *mut pte_t;
+            (*poolPtr).array[asid & MASK!(asidLowBits)] = 0 as *mut PTE;
             set_vm_root(&default_vspace_cap)
         } else {
             Ok(())

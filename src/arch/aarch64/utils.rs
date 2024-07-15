@@ -122,8 +122,12 @@ pub struct PUDE(usize);
 #[derive(Debug, Clone)]
 pub struct PDE(usize);
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct PTE(pub usize);
+
+#[repr(C)]
 #[derive(Debug, Clone)]
-pub struct PTE(usize);
+pub struct ASID(usize);
 
 /// Implemente generic function for given Ident
 #[macro_export]
@@ -184,7 +188,7 @@ impl_multi!(PGDE, PUDE, PDE, PTE {
     }
     /// Create self through addr and attributes.
     #[inline]
-    pub const fn new(addr: usize, sign: usize) -> Self {
+    pub const fn new_page(addr: usize, sign: usize) -> Self {
         Self((addr & PAGE_ADDR_MASK) | (sign & !PAGE_ADDR_MASK))
     }
 
@@ -286,5 +290,12 @@ impl_multi!(PDE {
     #[inline]
     pub const fn small_ptr_get_pt_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
+    }
+});
+
+impl_multi!(PTE{
+    #[inline]
+    pub fn get_ptr(&self) -> usize {
+        self as *const Self as usize
     }
 });

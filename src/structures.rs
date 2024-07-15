@@ -5,7 +5,7 @@ use core::{
 
 use sel4_common::{arch::config::PPTR_BASE, fault::lookup_fault_t, structures::exception_t};
 
-use crate::pte_t;
+use crate::PTE;
 
 /// 在`PSpace`段的虚拟地址空间中的指针
 ///
@@ -23,7 +23,7 @@ pub type asid_t = usize;
 #[derive(Copy, Clone)]
 pub struct findVSpaceForASID_ret {
     pub status: exception_t,
-    pub vspace_root: Option<*mut pte_t>,
+    pub vspace_root: Option<*mut PTE>,
     pub lookup_fault: Option<lookup_fault_t>,
 }
 

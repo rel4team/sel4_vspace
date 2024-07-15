@@ -1,5 +1,8 @@
-use crate::{pte_t, vm_attributes_t};
-use sel4_common::{plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t, BIT};
+use crate::{impl_multi, PTE, vm_attributes_t};
+use sel4_common::{
+    plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t,
+    utils::convert_to_mut_slice, BIT,
+};
 
 pub type hw_asid_t = u8;
 
@@ -28,32 +31,49 @@ impl vm_attributes_t {
 #[derive(Copy, Clone)]
 pub struct lookupPTSlot_ret_t {
     pub status: exception_t,
-    pub ptSlot: *mut pte_t,
+    pub ptSlot: *mut PTE,
 }
 
 #[repr(C)]
 pub struct lookupPGDSlot_ret_t {
     pub status: exception_t,
-    pub pgdSlot: *mut pte_t, // *mut pgde_t
+    pub pgdSlot: *mut PTE, // *mut pgde_t
 }
 
 #[repr(C)]
 pub struct lookupPDSlot_ret_t {
     pub status: exception_t,
-    pub pdSlot: *mut pte_t, // *mut pde_t
+    pub pdSlot: *mut PTE, // *mut pde_t
 }
 
 #[repr(C)]
 pub struct lookupPUDSlot_ret_t {
     pub status: exception_t,
-    pub pudSlot: *mut pte_t, // *mut pude_t
+    pub pudSlot: *mut PTE, // *mut pude_t
 }
 
 /// 用于存放`asid`对应的根页表基址，是一个`usize`的数组，其中`asid`按低`asidLowBits`位进行索引
+#[repr(C)]
 #[derive(Copy, Clone)]
-pub struct asid_pool_t {
-    pub array: [asid_map_t; BIT!(asidLowBits)],
+// pub struct asid_pool_t {
+//     pub array: [asid_map_t; BIT!(asidLowBits)],
+// }
+pub struct asid_pool_t(usize);
+
+/// Get the slice of the page_table items
+///
+/// Addr should be virtual address.
+pub(super) fn asid_pool_slice<T>(addr: usize) -> &'static mut [T] {
+    // ASID Pool's len is asidLowBits
+    convert_to_mut_slice::<T>(addr, asidLowBits)
 }
+
+impl_multi!(asid_pool_t{
+    #[inline]
+    pub fn asid_map_slice<T>(&self)->&'static mut [T]{
+        asid_pool_slice(self.0)
+    }
+});
 
 plus_define_bitfield! {
     pgde_t, 1, 0, 0, 0 => {

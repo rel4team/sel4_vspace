@@ -13,6 +13,4 @@ pub use pagetable::{activate_kernel_vspace, copyGlobalMappings, rust_map_kernel_
 pub use pte::PTEFlags;
 pub use satp::{setVSpaceRoot, sfence};
 pub use structures::*;
-pub use utils::{
-    kpptr_to_paddr, paddr_to_pptr, pptr_to_paddr, RISCV_GET_LVL_PGSIZE, RISCV_GET_LVL_PGSIZE_BITS,
-};
+pub use utils::*;
