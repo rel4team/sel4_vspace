@@ -5,7 +5,7 @@ use sel4_common::{
 };
 use sel4_cspace::arch::cap_t;
 
-use crate::{pptr_t, pptr_to_paddr, PTE, sfence, PTEFlags};
+use crate::{pptr_t, pptr_to_paddr, sfence, PTEFlags, PTE};
 
 #[no_mangle]
 #[link_section = ".boot.text"]

@@ -1,3 +1,5 @@
+use super::machine::mair_types;
+use crate::arch::VAddr;
 use sel4_common::{
     arch::{
         config::{KERNEL_ELF_BASE_OFFSET, PPTR_BASE_OFFSET},
@@ -7,9 +9,6 @@ use sel4_common::{
     utils::convert_to_mut_slice,
     MASK,
 };
-use sel4_cspace::interface::cte_t;
-
-use crate::arch::VAddr;
 
 pub const KPT_LEVELS: usize = 4;
 pub const seL4_VSpaceIndexBits: usize = 9;
@@ -107,11 +106,6 @@ pub fn ap_from_vm_rights(rights: vm_rights_t) -> usize {
     rights as usize
 }
 
-/* Generate a cte_t pointer from a tcb_t pointer */
-pub fn TCB_PTR_CTE_PTR(p: usize, i: usize) -> *mut cte_t {
-    ((p & !MASK!(seL4_TCBBits)) + i) as _
-}
-
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct PGDE(usize);
@@ -191,7 +185,7 @@ impl_multi!(PGDE, PUDE, PDE, PTE {
     pub const fn new_page(addr: usize, sign: usize) -> Self {
         Self((addr & PAGE_ADDR_MASK) | (sign & !PAGE_ADDR_MASK))
     }
-    
+
     /// Get the page's type info
     #[inline]
     pub const fn get_type(&self) -> usize {
@@ -211,7 +205,7 @@ impl_multi!(PGDE {
     }
 
     #[inline]
-    pub const fn pud_ptr_get_present(&self) -> bool {
+    pub const fn get_present(&self) -> bool {
         self.get_pgde_type() == 3 // pgde_pgde_pud
     }
 
@@ -224,22 +218,22 @@ impl_multi!(PGDE {
 impl_multi!(PUDE {
     #[inline]
     pub const fn new_1g(
-        uxn: usize,
+        uxn: bool,
         page_base_address: usize,
         ng: usize,
         af: usize,
         sh: usize,
         ap: usize,
-        attr_index: usize
+        attr_index: mair_types
     ) -> Self {
         Self(
-            (uxn & 0x1) << 54
+            (uxn as usize & 0x1) << 54
             | (page_base_address & 0xffffc0000000)
             | (ng & 0x1) << 11
             | (af & 0x1) << 10
             | (sh & 0x1) << 8
             | (ap & 0x1) << 6
-            | (attr_index & 0x7) << 2
+            | (attr_index as usize & 0x7) << 2
             | 0x1, // pude_1g_tag
         )
     }
@@ -250,7 +244,7 @@ impl_multi!(PUDE {
     }
 
     #[inline]
-    pub const fn pd_ptr_get_present(&self) -> bool {
+    pub const fn get_present(&self) -> bool {
         self.get_pude_type() == 3 // pude_pude_pd
     }
 
@@ -259,7 +253,7 @@ impl_multi!(PUDE {
         self.0 & 0xffffc0000000
     }
     #[inline]
-    pub fn pude_pd_ptr_get_pd_base_address(&self) -> usize {
+    pub fn get_pd_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
     }
 });
@@ -267,22 +261,22 @@ impl_multi!(PUDE {
 impl_multi!(PDE {
     #[inline]
     pub const fn new_large(
-        uxn: usize,
+        uxn: bool,
         page_base_address: usize,
         ng: usize,
         af: usize,
         sh: usize,
         ap: usize,
-        attr_index: usize
+        attr_index: mair_types
     ) -> Self {
         Self(
-            (uxn & 0x1) << 54
+            (uxn as usize & 0x1) << 54
             | (page_base_address & 0xffffffe00000)
             | (ng & 0x1) << 11
             | (af & 0x1) << 10
             | (sh & 0x1) << 8
             | (ap & 0x1) << 6
-            | (attr_index & 0x7) << 2
+            | (attr_index as usize & 0x7) << 2
             | 0x1,  // pde_large_tag
         )
     }
@@ -293,7 +287,7 @@ impl_multi!(PDE {
     }
 
     #[inline]
-    pub const fn small_ptr_get_present(&self) -> bool {
+    pub const fn get_present(&self) -> bool {
         self.get_pde_type() == 3 // pde_pde_small
     }
 
@@ -303,7 +297,7 @@ impl_multi!(PDE {
     }
 
     #[inline]
-    pub const fn pde_small_ptr_get_pt_base_address(&self) -> usize {
+    pub const fn get_pt_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
     }
 });

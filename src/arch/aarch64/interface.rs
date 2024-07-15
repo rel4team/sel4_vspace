@@ -1,9 +1,9 @@
 use core::ops::{Deref, DerefMut};
 
-use super::utils::{kpptr_to_paddr, GET_KPT_INDEX};
-use super::{machine::*, pte::PTEFlags};
+use super::machine::*;
 use crate::{
-    ap_from_vm_rights, asid_t, findVSpaceForASID, find_vspace_for_asid, pptr_t, pptr_to_paddr, vm_attributes_t, vptr_t, PDE, PGDE, PTE, PUDE, TCB_PTR_CTE_PTR
+    ap_from_vm_rights, asid_t, find_map_for_asid, pptr_t, pptr_to_paddr, vm_attributes_t, vptr_t,
+    PDE, PGDE, PTE, PUDE,
 };
 use sel4_common::arch::config::PPTR_BASE;
 use sel4_common::structures::exception_t;
@@ -11,7 +11,7 @@ use sel4_common::utils::convert_to_type_ref;
 use sel4_common::{
     arch::vm_rights_t,
     fault::lookup_fault_t,
-    sel4_config::{seL4_PageBits, tcbVTable, PT_INDEX_BITS},
+    sel4_config::{seL4_PageBits, PT_INDEX_BITS},
     BIT,
 };
 use sel4_cspace::{arch::CapTag, interface::cap_t};
@@ -99,179 +99,135 @@ pub fn activate_kernel_vspace() {
     }
 }
 
-pub fn makeUser1stLevel(
+pub fn make_user_1st_level(
     paddr: pptr_t,
     vm_rights: vm_rights_t,
     attributes: vm_attributes_t,
 ) -> PUDE {
-    let uxn = attributes.get_armExecuteNever();
-    if attributes.get_armPageCacheable() {
-        return PUDE::new_1g(
-            uxn as usize,
-            paddr,
-            1,
-            1,
-            0,
-            ap_from_vm_rights(vm_rights),
-            mair_types::NORMAL as usize,
-        );
-    }
-
-    return PUDE::new_1g(
-        uxn as usize,
+    PUDE::new_1g(
+        attributes.get_armExecuteNever(),
         paddr,
         1,
         1,
         0,
         ap_from_vm_rights(vm_rights),
-        mair_types::DEVICE_nGnRnE as usize,
-    );
-}
-
-pub fn makeUser2ndLevel(paddr: pptr_t, vm_rights: vm_rights_t, attributes: vm_attributes_t) -> PDE {
-    let uxn = attributes.get_armExecuteNever();
-    if attributes.get_armPageCacheable() {
-        return PDE::new_large(
-            uxn as usize,
-            paddr,
-            1,
-            1,
-            0,
-            ap_from_vm_rights(vm_rights),
-            mair_types::NORMAL as usize,
-        );
-    }
-    PDE::new_large(
-        uxn as usize,
-        paddr,
-        1,
-        1,
-        0,
-        ap_from_vm_rights(vm_rights),
-        mair_types::DEVICE_nGnRnE as usize,
+        attributes.get_attr_index(),
     )
 }
 
-pub fn makeUser3rdLevel(
+pub fn make_user_2nd_level(
     paddr: pptr_t,
     vm_rights: vm_rights_t,
     attributes: vm_attributes_t,
-) -> PTE {
-    let uxn = attributes.get_armExecuteNever();
-    if attributes.get_armPageCacheable() {
-        return PTE::pte_new(
-            uxn as usize,
-            paddr,
-            1,
-            1,
-            0,
-            ap_from_vm_rights(vm_rights),
-            mair_types::NORMAL as usize,
-            3, // RESERVED
-        );
-    }
-
-    PTE::pte_new(
-        uxn as usize,
+) -> PDE {
+    PDE::new_large(
+        attributes.get_armExecuteNever(),
         paddr,
         1,
         1,
         0,
         ap_from_vm_rights(vm_rights),
-        mair_types::DEVICE_nGnRnE as usize,
+        attributes.get_attr_index(),
+    )
+}
+
+pub fn makeUser3rdLevel(paddr: pptr_t, vm_rights: vm_rights_t, attributes: vm_attributes_t) -> PTE {
+    PTE::pte_new(
+        attributes.get_armExecuteNever() as usize,
+        paddr,
+        1,
+        1,
+        0,
+        ap_from_vm_rights(vm_rights),
+        attributes.get_attr_index() as usize,
         3, // RESERVED
     )
 }
 
-pub fn setVMRootForFlush(vspace: usize, asid: asid_t) -> bool {
-    extern "C" {
-        fn ksCurThread(); // from sel4 task
-    }
-
-    let threadRoot = unsafe { (*TCB_PTR_CTE_PTR(ksCurThread as usize, tcbVTable)).cap };
-
-    if threadRoot.get_cap_type() == CapTag::CapPageGlobalDirectoryCap
-        && threadRoot.get_pgd_is_mapped() > 0
-        && threadRoot.get_pgd_base_ptr() == vspace
+pub fn set_vm_root_for_flush_with_thread_root(
+    vspace: usize,
+    asid: asid_t,
+    thread_root: &cap_t,
+) -> bool {
+    if thread_root.get_cap_type() == CapTag::CapPageGlobalDirectoryCap
+        && thread_root.get_pgd_is_mapped() != 0
+        && thread_root.get_pgd_base_ptr() == vspace
     {
         return false;
     }
 
     // armv_context_switch(vspace, asid);
     setCurrentUserVSpaceRoot(ttbr_new(asid, vspace));
-    return true;
+    true
 }
 
-pub fn pageUpperDirectoryMapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> Option<*mut PGDE> {
-    let find_ret = findVSpaceForASID(asid);
-    if find_ret.status != exception_t::EXCEPTION_NONE {
-        return None;
+pub fn page_upper_directory_mapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> Option<*mut PGDE> {
+    match find_map_for_asid(asid) {
+        Some(asid_map) => {
+            let look_up_ret =
+                convert_to_type_ref::<PTE>(asid_map.get_vspace_root()).lookup_pgd_slot(vaddr);
+            if look_up_ret.status != exception_t::EXCEPTION_NONE {
+                return None;
+            }
+
+            let slot = unsafe { &mut (*look_up_ret.pgdSlot) };
+
+            if !slot.get_present()
+                || slot.get_pud_base_address() != pptr_to_paddr(pud as *const _ as _)
+            {
+                return None;
+            }
+
+            return Some(slot);
+        }
+        None => None,
     }
-
-    let lu_ret =
-        convert_to_type_ref::<PTE>(find_ret.vspace_root.unwrap() as usize).lookup_pgd_slot(vaddr);
-
-    if lu_ret.status != exception_t::EXCEPTION_NONE {
-        return None;
-    }
-
-    let pgde = lu_ret.pgdSlot;
-    if unsafe {
-        (*pgde).pud_ptr_get_present()
-            && (*pgde).get_pud_base_address() == pptr_to_paddr(pud as *const PUDE as usize)
-    } {
-        return Some(lu_ret.pgdSlot);
-    }
-
-    None
 }
 
-pub fn pageDirectoryMapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*mut PUDE> {
-    let find_ret = findVSpaceForASID(asid);
-    if find_ret.status != exception_t::EXCEPTION_NONE {
-        return None;
+pub fn page_directory_mapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*mut PUDE> {
+    match find_map_for_asid(asid) {
+        Some(asid_map) => {
+            let look_up_ret =
+                convert_to_type_ref::<PTE>(asid_map.get_vspace_root()).lookup_pud_slot(vaddr);
+            if look_up_ret.status != exception_t::EXCEPTION_NONE {
+                return None;
+            }
+
+            let slot = unsafe { &mut (*look_up_ret.pudSlot) };
+
+            if !slot.get_present()
+                || slot.get_pd_base_address() != pptr_to_paddr(pd as *const _ as _)
+            {
+                return None;
+            }
+
+            return Some(slot);
+        }
+        None => None,
     }
-
-    let lu_ret =
-        convert_to_type_ref::<PTE>(find_ret.vspace_root.unwrap() as usize).lookup_pud_slot(vaddr);
-
-    if lu_ret.status != exception_t::EXCEPTION_NONE {
-        return None;
-    }
-
-    let pude = lu_ret.pudSlot;
-    if unsafe {
-        (*pude).pd_ptr_get_present()
-            && (*pude).pude_pd_ptr_get_pd_base_address() == pptr_to_paddr(pd as *const PDE as usize)
-    } {
-        return Some(lu_ret.pudSlot);
-    }
-
-    None
 }
 
-pub fn pageTableMapped(asid: asid_t, vaddr: vptr_t, pt: &PTE) -> Option<*mut PDE> {
-    let find_ret = findVSpaceForASID(asid);
-    if find_ret.status != exception_t::EXCEPTION_NONE {
-        return None;
+pub fn page_table_mapped(asid: asid_t, vaddr: vptr_t, pt: &PTE) -> Option<*mut PDE> {
+    match find_map_for_asid(asid) {
+        Some(asid_map) => {
+            let look_up_ret =
+                convert_to_type_ref::<PTE>(asid_map.get_vspace_root()).lookup_pd_slot(vaddr);
+            if look_up_ret.status != exception_t::EXCEPTION_NONE {
+                return None;
+            }
+
+            let slot = unsafe { &mut (*look_up_ret.pdSlot) };
+
+            if !slot.get_present()
+                || slot.get_pt_base_address() != pptr_to_paddr(pt as *const _ as _)
+            {
+                return None;
+            }
+
+            return Some(slot);
+        }
+        None => None,
     }
-
-    let lu_ret =
-        convert_to_type_ref::<PTE>(find_ret.vspace_root.unwrap() as usize).lookup_pd_slot(vaddr);
-
-    if lu_ret.status != exception_t::EXCEPTION_NONE {
-        return None;
-    }
-
-    let pde = lu_ret.pdSlot;
-    if unsafe {
-        (*pde).small_ptr_get_present()
-            && (*pde).pde_small_ptr_get_pt_base_address() == pptr_to_paddr(pt as *const PTE as usize)
-    } {
-        return Some(lu_ret.pdSlot);
-    }
-
-    None
 }
 
 #[inline]

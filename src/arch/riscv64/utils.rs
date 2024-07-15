@@ -61,7 +61,6 @@ pub fn paddr_to_pptr(x: usize) -> usize {
     x + PPTR_BASE_OFFSET
 }
 
-
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct PTE(pub usize);

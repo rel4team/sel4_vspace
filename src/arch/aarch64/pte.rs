@@ -229,7 +229,7 @@ impl PTE {
             return ret;
         }
         unsafe {
-            if (*pdSlot.pdSlot).small_ptr_get_present() == false {
+            if (*pdSlot.pdSlot).get_present() == false {
                 // todo!() I cannot use current_lookup_fault here
                 // current_lookup_fault =lookup_fault_t::new_missing_cap(seL4_PageBits+PT_INDEX_BITS);
                 let ret = lookupPTSlot_ret_t {
@@ -240,9 +240,7 @@ impl PTE {
             }
         }
         let ptIndex = GET_PT_INDEX(vptr);
-        let pt = unsafe {
-            paddr_to_pptr((*pdSlot.pdSlot).pde_small_ptr_get_pt_base_address()) as *mut PTE
-        };
+        let pt = unsafe { paddr_to_pptr((*pdSlot.pdSlot).get_pt_base_address()) as *mut PTE };
 
         let ret = lookupPTSlot_ret_t {
             status: exception_t::EXCEPTION_NONE,
@@ -266,7 +264,7 @@ impl PTE {
             return ret;
         }
         unsafe {
-            if (*pudSlot.pudSlot).pd_ptr_get_present() == false {
+            if (*pudSlot.pudSlot).get_present() == false {
                 // todo!() I cannot use current_lookup_fault here
                 // current_lookup_fault =lookup_fault_t::new_missing_cap(seL4_PageBits+PT_INDEX_BITS);
                 let ret = lookupPDSlot_ret_t {
@@ -277,9 +275,7 @@ impl PTE {
             }
         }
         let pdIndex = GET_PD_INDEX(vptr);
-        let pd = unsafe {
-            paddr_to_pptr((*pudSlot.pudSlot).pude_pd_ptr_get_pd_base_address()) as *mut PDE
-        };
+        let pd = unsafe { paddr_to_pptr((*pudSlot.pudSlot).get_pd_base_address()) as *mut PDE };
 
         let ret = lookupPDSlot_ret_t {
             status: exception_t::EXCEPTION_NONE,
@@ -291,7 +287,7 @@ impl PTE {
     pub fn lookup_pud_slot(&self, vptr: vptr_t) -> lookupPUDSlot_ret_t {
         let pgdSlot = self.lookup_pgd_slot(vptr);
         unsafe {
-            if (*pgdSlot.pgdSlot).pud_ptr_get_present() == false {
+            if (*pgdSlot.pgdSlot).get_present() == false {
                 // todo!() I cannot use current_lookup_fault here
                 // current_lookup_fault =lookup_fault_t::new_missing_cap(seL4_PageBits+PT_INDEX_BITS);
                 let ret = lookupPUDSlot_ret_t {

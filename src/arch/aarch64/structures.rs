@@ -1,7 +1,10 @@
 use crate::{impl_multi, vm_attributes_t, PDE, PGDE, PTE, PUDE};
 use sel4_common::{
-    plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t, utils::convert_to_mut_slice, BIT
+    plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t,
+    utils::convert_to_mut_slice, BIT,
 };
+
+use super::machine::mair_types;
 
 impl vm_attributes_t {
     pub fn get_armExecuteNever(&self) -> bool {
@@ -18,6 +21,14 @@ impl vm_attributes_t {
         } else {
             false
         }
+    }
+
+    pub fn get_attr_index(&self) -> mair_types {
+        if self.get_armPageCacheable() {
+            return mair_types::NORMAL;
+        }
+
+        mair_types::DEVICE_nGnRnE
     }
 }
 
