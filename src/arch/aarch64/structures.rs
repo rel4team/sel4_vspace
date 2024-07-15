@@ -1,10 +1,7 @@
-use crate::{impl_multi, vm_attributes_t, PTE};
+use crate::{impl_multi, vm_attributes_t, PDE, PGDE, PTE, PUDE};
 use sel4_common::{
-    plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t,
-    utils::convert_to_mut_slice, BIT,
+    plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t, utils::convert_to_mut_slice, BIT
 };
-
-pub type hw_asid_t = u8;
 
 impl vm_attributes_t {
     pub fn get_armExecuteNever(&self) -> bool {
@@ -37,19 +34,19 @@ pub struct lookupPTSlot_ret_t {
 #[repr(C)]
 pub struct lookupPGDSlot_ret_t {
     pub status: exception_t,
-    pub pgdSlot: *mut PTE, // *mut pgde_t
+    pub pgdSlot: *mut PGDE, // *mut pgde_t
 }
 
 #[repr(C)]
 pub struct lookupPDSlot_ret_t {
     pub status: exception_t,
-    pub pdSlot: *mut PTE, // *mut pde_t
+    pub pdSlot: *mut PDE, // *mut pde_t
 }
 
 #[repr(C)]
 pub struct lookupPUDSlot_ret_t {
     pub status: exception_t,
-    pub pudSlot: *mut PTE, // *mut pude_t
+    pub pudSlot: *mut PUDE, // *mut pude_t
 }
 
 #[repr(C)]

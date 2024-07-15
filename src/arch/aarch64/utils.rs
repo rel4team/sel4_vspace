@@ -120,7 +120,11 @@ pub struct PGDE(usize);
 pub struct PUDE(usize);
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct PDE(usize);
+pub struct PDE(pub usize);
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct PTE(pub usize);
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct PTE(pub usize);
