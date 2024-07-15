@@ -1,9 +1,8 @@
-use aarch64_cpu::registers::VTCR_EL2::SH0::Non;
 use sel4_common::{
-    fault::{lookup_fault_invalid_root, lookup_fault_t},
-    sel4_config::{asidHighBits, asidLowBits},
+    fault::lookup_fault_t,
+    sel4_config::{asidHighBits, asidLowBits, IT_ASID},
     structures::exception_t,
-    utils::{convert_to_mut_type_ref, convert_to_option_mut_type_ref},
+    utils::{convert_ref_type_to_usize, convert_to_mut_type_ref, convert_to_option_mut_type_ref},
     BIT, MASK,
 };
 use sel4_cspace::arch::cap_t;
@@ -92,5 +91,15 @@ pub fn set_asid_pool_by_index(index: usize, pool_ptr: usize) {
     // assert!(index < BIT!(asidHighBits));
     unsafe {
         armKSASIDTable[index] = pool_ptr;
+    }
+}
+
+#[no_mangle]
+pub fn write_it_asid_pool(it_ap_cap: &cap_t, it_vspace_cap: &cap_t) {
+    let ap = convert_to_mut_type_ref::<asid_pool_t>(it_ap_cap.get_asid_pool());
+    let asid_map = asid_map_t::new_vspace(it_vspace_cap.get_pgd_base_ptr());
+    ap.set_asid_map(IT_ASID, asid_map);
+    unsafe {
+        armKSASIDTable[IT_ASID >> asidLowBits] = convert_ref_type_to_usize(ap);
     }
 }

@@ -4,16 +4,14 @@ use sel4_common::{
         vm_rights_t,
     },
     sel4_config::{seL4_LargePageBits, ARM_Large_Page, ARM_Small_Page, PT_INDEX_BITS},
-    utils::{convert_to_mut_type_ptr, convert_to_mut_type_ref},
+    utils::convert_to_mut_type_ref,
     BIT,
 };
 use sel4_cspace::arch::cap_t;
 
 use crate::{
-    arch::{aarch64::utils::GET_PGD_INDEX, VAddr},
-    asid_t, kpptr_to_paddr, paddr_to_pptr, pde_t, pgde_t, pptr_t, pptr_to_paddr, pude_t,
-    vm_attributes_t, vptr_t, PTEFlags, GET_KPT_INDEX, GET_PD_INDEX, GET_PT_INDEX, GET_UPUD_INDEX,
-    PDE, PGDE, PTE, PUDE,
+    arch::VAddr, asid_t, kpptr_to_paddr, pptr_t, pptr_to_paddr, vm_attributes_t, vptr_t, PTEFlags,
+    GET_KPT_INDEX, GET_PT_INDEX, PDE, PGDE, PTE, PUDE,
 };
 
 use super::interface::{
@@ -24,8 +22,8 @@ use super::page_slice;
 
 #[derive(PartialEq, Eq, Debug)]
 enum find_type {
-    pde_t,
-    pude_t,
+    PDE,
+    PUDE,
     PTE,
 }
 
@@ -120,7 +118,7 @@ pub fn map_it_pt_cap(vspace_cap: &cap_t, pt_cap: &cap_t) {
     let vptr = pt_cap.get_pt_mapped_address();
     let pt = pt_cap.get_pt_base_ptr();
     let target_pte =
-        convert_to_mut_type_ref::<PDE>(find_pt(vspace_root, vptr.into(), find_type::pde_t));
+        convert_to_mut_type_ref::<PDE>(find_pt(vspace_root, vptr.into(), find_type::PDE));
     target_pte.set_next_level_paddr(pptr_to_paddr(pt));
     // TODO: move 0x3 into a proper position.
     target_pte.set_attr(3);
@@ -171,11 +169,11 @@ pub fn map_it_frame_cap(vspace_cap: &cap_t, frame_cap: &cap_t, exec: bool) {
 fn find_pt(vspace_root: usize, vptr: VAddr, ftype: find_type) -> usize {
     let pgd = page_slice::<PGDE>(vspace_root);
     let pud = pgd[vptr.pgd_index()].next_level_slice::<PUDE>();
-    if ftype == find_type::pude_t {
+    if ftype == find_type::PUDE {
         return pud[vptr.pud_index()].self_addr();
     }
     let pd = pud[vptr.pud_index()].next_level_slice::<PDE>();
-    if ftype == find_type::pde_t {
+    if ftype == find_type::PDE {
         return pd[vptr.pd_index()].self_addr();
     }
     let pt = pd[vptr.pd_index()].next_level_slice::<PTE>();
