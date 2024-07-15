@@ -126,10 +126,6 @@ pub struct PDE(pub usize);
 pub struct PTE(pub usize);
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct PTE(pub usize);
-
-#[repr(C)]
 #[derive(Debug, Clone)]
 pub struct ASID(usize);
 
