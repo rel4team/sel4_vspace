@@ -39,7 +39,7 @@ pub(crate) enum mair_types {
     NORMAL_WT = 5,
 }
 
-pub const RESERVED: usize = 0;
+pub const RESERVED: usize = 3;
 
 #[no_mangle]
 #[link_section = ".boot.text"]
