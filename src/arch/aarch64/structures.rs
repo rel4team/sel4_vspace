@@ -65,7 +65,7 @@ pub struct asid_pool_t(usize);
 /// Addr should be virtual address.
 pub(super) fn asid_pool_slice<T>(addr: usize) -> &'static mut [T] {
     // ASID Pool's len is asidLowBits
-    convert_to_mut_slice::<T>(addr, asidLowBits)
+    convert_to_mut_slice::<T>(addr, BIT!(asidLowBits))
 }
 
 impl_multi!(asid_pool_t {
