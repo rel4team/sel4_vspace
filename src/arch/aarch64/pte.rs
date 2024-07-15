@@ -7,14 +7,17 @@ use crate::{
             lookupPDSlot_ret_t, lookupPGDSlot_ret_t, lookupPTSlot_ret_t, lookupPUDSlot_ret_t,
         },
         utils::{GET_PD_INDEX, GET_PGD_INDEX, GET_PT_INDEX, GET_UPUD_INDEX},
-    }, asid_t, find_vspace_for_asid, pptr_to_paddr, pte_t, vm_attributes_t, vptr_t, PDE, PGDE, PUDE
+    }, asid_t, find_vspace_for_asid, lookupFrame_ret_t, pptr_to_paddr, vm_attributes_t, vptr_t, PDE, PGDE, PTE, PUDE
 };
 use sel4_common::{
     arch::vm_rights_t,
     fault::lookup_fault_t,
-    sel4_config::{seL4_PageBits, seL4_PageTableBits, PT_INDEX_BITS},
+    sel4_config::{
+        seL4_PageBits, seL4_PageTableBits, ARM_Huge_Page, ARM_Large_Page, ARM_Small_Page,
+        PT_INDEX_BITS,
+    },
     structures::exception_t,
-    utils::{convert_ref_type_to_usize, convert_to_mut_type_ref},
+    utils::{convert_ref_type_to_usize, convert_to_mut_type_ref, convert_to_type_ref},
     BIT,
 };
 
@@ -26,11 +29,22 @@ enum vm_page_size {
     ARMHugePage,
 }
 
-enum pte_tag {
-    pte_pte_table = 3,
-    pte_pte_page = 1,
-    pte_pte_4k_page = 7,
-    pte_pte_invalid = 0,
+enum pte_tag_t {
+    pte_table = 3,
+    pte_page = 1,
+    pte_4k_page = 7,
+    pte_invalid = 0,
+}
+
+enum pude_tag_t {
+    pude_invalid = 0,
+    pude_1g = 1,
+    pude_pd = 3,
+}
+
+enum pde_tag_t {
+    pde_large = 1,
+    pde_small = 3,
 }
 
 pub const UPT_LEVELS: usize = 4;
@@ -86,7 +100,7 @@ bitflags::bitflags! {
     }
 }
 
-impl pte_t {
+impl PTE {
     pub fn new(addr: usize, flags: PTEFlags) -> Self {
         Self((addr & 0xfffffffff000) | flags.bits())
     }
@@ -97,16 +111,12 @@ impl pte_t {
         Self((addr & 0xfffffffff000) | flags.bits() | 0x400000000000003)
     }
 
-    pub fn get_pte_from_ppn_mut(&self) -> &mut pte_t {
-        convert_to_mut_type_ref::<pte_t>(paddr_to_pptr(self.get_ppn() << seL4_PageTableBits))
+    pub fn get_pte_from_ppn_mut(&self) -> &mut PTE {
+        convert_to_mut_type_ref::<PTE>(paddr_to_pptr(self.get_ppn() << seL4_PageTableBits))
     }
 
     pub fn get_ppn(&self) -> usize {
         (self.0 & 0xfffffffff000) >> 10
-    }
-
-    pub fn get_type(&self) -> usize {
-        (self.0 & 0x3) | ((0x1 << 58) >> 56)
     }
 
     pub fn as_pgde(&self) -> PGDE {
@@ -122,14 +132,14 @@ impl pte_t {
     }
 
     pub fn is_pte_table(&self) -> bool {
-        self.get_type() != pte_tag::pte_pte_table as usize
+        self.get_type() != pte_tag_t::pte_table as usize
     }
     pub fn get_valid(&self) -> usize {
-        (self.get_type() != pte_tag::pte_pte_invalid as usize) as usize
+        (self.get_type() != pte_tag_t::pte_invalid as usize) as usize
     }
 
     pub fn pte_table_get_present(&self) -> bool {
-        self.get_type() != pte_tag::pte_pte_table as usize
+        self.get_type() != pte_tag_t::pte_table as usize
     }
 
     pub fn new_invalid() -> Self {
@@ -170,19 +180,19 @@ impl pte_t {
         }
         flags |= Self::ap_from_vm_rights_t(rights);
         if vm_page_size::ARMSmallPage as usize == page_size {
-            pte_t::new_4k_page(paddr, flags)
+            PTE::new_4k_page(paddr, flags)
         } else {
-            pte_t::new(paddr, flags)
+            PTE::new(paddr, flags)
         }
     }
 
     pub fn unmap_page_table(&mut self, asid: asid_t, vptr: vptr_t) {
-        let target_pt = self as *mut pte_t;
+        let target_pt = self as *mut PTE;
         let find_ret = find_vspace_for_asid(asid);
         if unlikely(find_ret.status != exception_t::EXCEPTION_NONE) {
             return;
         }
-        let mut pt = find_ret.vspace_root.unwrap();
+        let pt: *mut PTE = find_ret.vspace_root.unwrap();
         let mut ptSlot = unsafe { &mut *(pt.add(GET_UPT_INDEX(vptr, 0))) };
         assert_ne!(find_ret.vspace_root.unwrap(), target_pt);
         for i in 0..UPT_LEVELS - 1 {
@@ -198,7 +208,7 @@ impl pte_t {
         if pt != target_pt {
             return;
         }
-        *ptSlot = pte_t::new_invalid();
+        *ptSlot = PTE::new_invalid();
         invalidate_local_tlb_asid(asid);
         clean_by_va_pou(
             convert_ref_type_to_usize(ptSlot),
@@ -210,11 +220,9 @@ impl pte_t {
     pub fn lookup_pt_slot(&self, vptr: vptr_t) -> lookupPTSlot_ret_t {
         let pdSlot = self.lookup_pd_slot(vptr);
         if pdSlot.status != exception_t::EXCEPTION_NONE {
-            let ret = unsafe {
-                lookupPTSlot_ret_t {
-                    status: pdSlot.status,
-                    ptSlot: 0 as *mut pte_t,
-                }
+            let ret = lookupPTSlot_ret_t {
+                status: pdSlot.status,
+                ptSlot: 0 as *mut PTE,
             };
             return ret;
         }
@@ -225,14 +233,14 @@ impl pte_t {
                 let ret = unsafe {
                     lookupPTSlot_ret_t {
                         status: exception_t::EXCEPTION_LOOKUP_FAULT,
-                        ptSlot: 0 as *mut pte_t,
+                        ptSlot: 0 as *mut PTE,
                     }
                 };
                 return ret;
             }
         }
         let ptIndex = GET_PT_INDEX(vptr);
-        let pt = unsafe { paddr_to_pptr((*pdSlot.pdSlot).0 & 0xfffffffff000) as *mut pte_t };
+        let pt = unsafe { paddr_to_pptr((*pdSlot.pdSlot).0 & 0xfffffffff000) as *mut PTE };
 
         let ret = lookupPTSlot_ret_t {
             status: exception_t::EXCEPTION_NONE,
@@ -240,19 +248,18 @@ impl pte_t {
         };
         ret
     }
+
     // acturally the lookup pd slot can only be seen under aarch64 and x86 in sel4
     // and in sel4, it should be the impl function of vspace_root_t
-    // but as it define the pde_t as vspace_root_t and define pte_t as vspace_root_t
-    // so I think it is reasonable here to let those functions as a member funcion of pte_t
+    // but as it define the pde_t as vspace_root_t and define PTE as vspace_root_t
+    // so I think it is reasonable here to let those functions as a member funcion of PTE
     // commented by ZhiyuanSue
     pub fn lookup_pd_slot(&self, vptr: vptr_t) -> lookupPDSlot_ret_t {
-        let pudSlot = self.lookup_pud_slot(vptr);
+        let pudSlot: lookupPUDSlot_ret_t = self.lookup_pud_slot(vptr);
         if pudSlot.status != exception_t::EXCEPTION_NONE {
-            let ret = unsafe {
-                lookupPDSlot_ret_t {
-                    status: pudSlot.status,
-                    pdSlot: unsafe { 0 as *mut pte_t },
-                }
+            let ret = lookupPDSlot_ret_t {
+                status: pudSlot.status,
+                pdSlot: 0 as *mut PTE,
             };
             return ret;
         }
@@ -262,13 +269,13 @@ impl pte_t {
                 // current_lookup_fault =lookup_fault_t::new_missing_cap(seL4_PageBits+PT_INDEX_BITS);
                 let ret = lookupPDSlot_ret_t {
                     status: exception_t::EXCEPTION_LOOKUP_FAULT,
-                    pdSlot: 0 as *mut pte_t,
+                    pdSlot: 0 as *mut PTE,
                 };
                 return ret;
             }
         }
         let pdIndex = GET_PD_INDEX(vptr);
-        let pd = unsafe { paddr_to_pptr((*pudSlot.pudSlot).0 & 0xfffffffff000) as *mut pte_t };
+        let pd = unsafe { paddr_to_pptr((*pudSlot.pudSlot).0 & 0xfffffffff000) as *mut PTE };
 
         let ret = lookupPDSlot_ret_t {
             status: exception_t::EXCEPTION_NONE,
@@ -276,6 +283,7 @@ impl pte_t {
         };
         ret
     }
+
     pub fn lookup_pud_slot(&self, vptr: vptr_t) -> lookupPUDSlot_ret_t {
         let pgdSlot = self.lookup_pgd_slot(vptr);
         unsafe {
@@ -284,13 +292,13 @@ impl pte_t {
                 // current_lookup_fault =lookup_fault_t::new_missing_cap(seL4_PageBits+PT_INDEX_BITS);
                 let ret = lookupPUDSlot_ret_t {
                     status: exception_t::EXCEPTION_LOOKUP_FAULT,
-                    pudSlot: 0 as *mut pte_t,
+                    pudSlot: 0 as *mut PTE,
                 };
                 return ret;
             }
         }
         let pudIndex = GET_UPUD_INDEX(vptr);
-        let pud = unsafe { paddr_to_pptr((*pgdSlot.pgdSlot).0 & 0xfffffffff000) as *mut pte_t };
+        let pud = unsafe { paddr_to_pptr((*pgdSlot.pgdSlot).0 & 0xfffffffff000) as *mut PTE };
 
         let ret = lookupPUDSlot_ret_t {
             status: exception_t::EXCEPTION_NONE,
@@ -298,14 +306,64 @@ impl pte_t {
         };
         ret
     }
+
     pub fn lookup_pgd_slot(&self, vptr: vptr_t) -> lookupPGDSlot_ret_t {
         let pgdIndex = GET_PGD_INDEX(vptr);
         let ret = lookupPGDSlot_ret_t {
             status: exception_t::EXCEPTION_NONE,
-            pgdSlot: unsafe { (self.0 as *mut pte_t).add(pgdIndex) },
+            pgdSlot: unsafe { (self.0 as *mut PTE).add(pgdIndex) },
         };
         ret
     }
+    pub fn lookup_frame(&self, vptr: vptr_t) -> lookupFrame_ret_t {
+        let mut ret = lookupFrame_ret_t {
+            valid: false,
+            frameBase: 0,
+            frameSize: 0,
+        };
+        let pudSlot = self.lookup_pud_slot(vptr);
+        if pudSlot.status != exception_t::EXCEPTION_NONE {
+            ret.valid = false;
+            return ret;
+        }
+        let pudSlot = convert_to_type_ref::<PUDE>(pudSlot.pudSlot as usize);
+        unsafe {
+            match core::mem::transmute::<u8, pude_tag_t>(pudSlot.get_type() as _) {
+                pude_tag_t::pude_1g => {
+                    ret.frameBase = pudSlot.pude_1g_ptr_get_page_base_address();
+                    ret.frameSize = ARM_Huge_Page;
+                    ret.valid = true;
+                    return ret;
+                }
+                pude_tag_t::pude_pd => {
+                    // TODO: check if below code from sel4 is work
+                    //         pde_t *pd = paddr_to_pptr(pude_pude_pd_ptr_get_pd_base_address(pudSlot.pudSlot));
+                    //         pde_t *pdSlot = pd + GET_PD_INDEX(vptr);
+                    let pdSlot: &PDE = pudSlot.next_level_slice()[GET_PD_INDEX(vptr)];
+
+                    if pdSlot.get_type() == pde_tag_t::pde_large as usize {
+                        ret.frameBase = pdSlot.pde_large_ptr_get_page_base_address();
+                        ret.frameSize = ARM_Large_Page;
+                        ret.valid = true;
+                        return ret;
+                    }
+
+                    if pdSlot.get_type() == pde_tag_t::pde_small as usize {
+                        let ptSlot: &PTE = pdSlot.next_level_slice()[GET_PT_INDEX(vptr)];
+                        if ptSlot.pte_table_get_present() {
+                            ret.frameBase = ptSlot.pte_ptr_get_page_base_address();
+                            ret.frameSize = ARM_Small_Page;
+                            ret.valid = true;
+                            return ret;
+                        }
+                    }
+                }
+                _ => panic!("invalid pt slot type:{}", pudSlot.get_type()),
+            }
+        }
+        ret
+    }
+
     pub fn pte_new(
         UXN: usize,
         page_base_address: usize,
@@ -315,7 +373,7 @@ impl pte_t {
         AP: usize,
         AttrIndx: usize,
         reserved: usize,
-    ) -> pte_t {
+    ) -> PTE {
         let val = 0
             | (UXN & 0x1) << 54
             | (page_base_address & 0xfffffffff000) >> 0
@@ -326,6 +384,6 @@ impl pte_t {
             | (AttrIndx & 0x7) << 2
             | (reserved & 0x3) << 0;
 
-        pte_t(val)
+        PTE(val)
     }
 }

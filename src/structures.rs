@@ -3,12 +3,9 @@ use core::{
     fmt::{Debug, Display},
 };
 
-use sel4_common::{
-    arch::config::PPTR_BASE, fault::lookup_fault_t, sel4_config::asidLowBits,
-    structures::exception_t, utils::convert_to_option_mut_type_ref, BIT,
-};
+use sel4_common::{arch::config::PPTR_BASE, fault::lookup_fault_t, structures::exception_t};
 
-use crate::pte_t;
+use crate::PTE;
 
 /// 在`PSpace`段的虚拟地址空间中的指针
 ///
@@ -26,33 +23,8 @@ pub type asid_t = usize;
 #[derive(Copy, Clone)]
 pub struct findVSpaceForASID_ret {
     pub status: exception_t,
-    pub vspace_root: Option<*mut pte_t>,
+    pub vspace_root: Option<*mut PTE>,
     pub lookup_fault: Option<lookup_fault_t>,
-}
-
-/// 用于存放`asid`对应的根页表基址，是一个`usize`的数组，其中`asid`按低`asidLowBits`位进行索引
-#[derive(Copy, Clone)]
-pub struct asid_pool_t {
-    pub array: [*mut pte_t; BIT!(asidLowBits)],
-}
-
-/// `asid pool`相关操作
-impl asid_pool_t {
-    #[inline]
-    pub fn get_ptr(&self) -> pptr_t {
-        self as *const Self as pptr_t
-    }
-
-    #[inline]
-    pub fn get_vspace_by_index(&mut self, index: usize) -> Option<&'static mut pte_t> {
-        convert_to_option_mut_type_ref::<pte_t>(self.array[index] as usize)
-    }
-
-    #[inline]
-    pub fn set_vspace_by_index(&mut self, index: usize, vspace_ptr: pptr_t) {
-        // assert!(index < BIT!(asidLowBits));
-        self.array[index] = vspace_ptr as *mut pte_t;
-    }
 }
 
 /// 进行系统调用时，应用程序向内核传递信息的消息格式
@@ -78,6 +50,10 @@ impl vm_attributes_t {
     pub fn set_execute_never(&mut self, v64: usize) {
         self.0 &= !0x1usize;
         self.0 |= (v64 << 0) & 0x1usize;
+    }
+
+    pub fn get_page_cacheable(&self) -> usize {
+        self.0 & 0x1
     }
 }
 
