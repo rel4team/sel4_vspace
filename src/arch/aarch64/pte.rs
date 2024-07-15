@@ -31,8 +31,8 @@ enum vm_page_size {
     ARMHugePage,
 }
 
-enum PTEag_t {
-    PTEable = 3,
+enum pte_tag_t {
+    pte_table = 3,
     pte_page = 1,
     pte_4k_page = 7,
     pte_invalid = 0,
@@ -134,14 +134,14 @@ impl PTE {
     }
 
     pub fn is_pte_table(&self) -> bool {
-        self.get_type() != PTEag_t::PTEable as usize
+        self.get_type() != pte_tag_t::pte_table as usize
     }
     pub fn get_valid(&self) -> usize {
-        (self.get_type() != PTEag_t::pte_invalid as usize) as usize
+        (self.get_type() != pte_tag_t::pte_invalid as usize) as usize
     }
 
-    pub fn PTEable_get_present(&self) -> bool {
-        self.get_type() != PTEag_t::PTEable as usize
+    pub fn pte_table_get_present(&self) -> bool {
+        self.get_type() != pte_tag_t::pte_table as usize
     }
 
     pub fn new_invalid() -> Self {
@@ -202,7 +202,7 @@ impl PTE {
                 break;
             }
             ptSlot = unsafe { &mut *(pt.add(GET_UPT_INDEX(vptr, i))) };
-            if unlikely(ptSlot.PTEable_get_present()) {
+            if unlikely(ptSlot.pte_table_get_present()) {
                 return;
             }
         }
@@ -232,17 +232,17 @@ impl PTE {
             if (*pdSlot.pdSlot).small_ptr_get_present() == false {
                 // todo!() I cannot use current_lookup_fault here
                 // current_lookup_fault =lookup_fault_t::new_missing_cap(seL4_PageBits+PT_INDEX_BITS);
-                let ret = unsafe {
-                    lookupPTSlot_ret_t {
-                        status: exception_t::EXCEPTION_LOOKUP_FAULT,
-                        ptSlot: 0 as *mut PTE,
-                    }
+                let ret = lookupPTSlot_ret_t {
+                    status: exception_t::EXCEPTION_LOOKUP_FAULT,
+                    ptSlot: 0 as *mut PTE,
                 };
                 return ret;
             }
         }
         let ptIndex = GET_PT_INDEX(vptr);
-        let pt = unsafe { paddr_to_pptr((*pdSlot.pdSlot).0 & 0xfffffffff000) as *mut PTE };
+        let pt = unsafe {
+            paddr_to_pptr((*pdSlot.pdSlot).pde_small_ptr_get_pt_base_address()) as *mut PTE
+        };
 
         let ret = lookupPTSlot_ret_t {
             status: exception_t::EXCEPTION_NONE,
@@ -354,7 +354,7 @@ impl PTE {
 
                     if pdSlot.get_type() == pde_tag_t::pde_small as usize {
                         let ptSlot: &PTE = pdSlot.next_level_slice()[GET_PT_INDEX(vptr)];
-                        if ptSlot.PTEable_get_present() {
+                        if ptSlot.pte_table_get_present() {
                             ret.frameBase = ptSlot.pte_ptr_get_page_base_address();
                             ret.frameSize = ARM_Small_Page;
                             ret.valid = true;

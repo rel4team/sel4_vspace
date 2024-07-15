@@ -99,7 +99,7 @@ impl PTE {
         let mut i = 0;
         while i < CONFIG_PT_LEVELS - 1 && pt != target_pt {
             ptSlot = unsafe { &mut *(pt.add(RISCV_GET_PT_INDEX(vptr, i))) };
-            if unlikely(ptSlot.is_PTEable()) {
+            if unlikely(ptSlot.is_pte_table()) {
                 return;
             }
             pt = ptSlot.get_pte_from_ppn_mut() as *mut PTE;
@@ -120,7 +120,7 @@ impl PTE {
 
     ///判断是页目录节点还是叶子节点，当`valid`置1，`read``write``exec`置0时，代表为叶子节点
     #[inline]
-    pub fn is_PTEable(&self) -> bool {
+    pub fn is_pte_table(&self) -> bool {
         self.get_valid() != 0
             && !(self.get_read() != 0 || self.get_write() != 0 || self.get_execute() != 0)
     }
@@ -171,7 +171,7 @@ impl PTE {
             },
         };
 
-        while unsafe { (*ret.ptSlot).is_PTEable() } && level > 0 {
+        while unsafe { (*ret.ptSlot).is_pte_table() } && level > 0 {
             level -= 1;
             ret.ptBitsLeft -= PT_INDEX_BITS;
             pt = unsafe { (*ret.ptSlot).get_pte_from_ppn_mut() as *mut PTE };

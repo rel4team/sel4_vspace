@@ -1,0 +1,179 @@
+diff --git a/.gitignore b/.gitignore
+index 2f7896d..1075b43 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1 +1,2 @@
+ target/
++*.patch
+\ No newline at end of file
+diff --git a/src/arch/aarch64/pte.rs b/src/arch/aarch64/pte.rs
+index b16a6b7..9d71f6b 100644
+--- a/src/arch/aarch64/pte.rs
++++ b/src/arch/aarch64/pte.rs
+@@ -7,7 +7,9 @@ use crate::{
+             lookupPDSlot_ret_t, lookupPGDSlot_ret_t, lookupPTSlot_ret_t, lookupPUDSlot_ret_t,
+         },
+         utils::{GET_PD_INDEX, GET_PGD_INDEX, GET_PT_INDEX, GET_UPUD_INDEX},
+-    }, asid_t, find_vspace_for_asid, lookupFrame_ret_t, pptr_to_paddr, vm_attributes_t, vptr_t, PDE, PGDE, PTE, PUDE
++    },
++    asid_t, find_vspace_for_asid, lookupFrame_ret_t, pptr_to_paddr, vm_attributes_t, vptr_t, PDE,
++    PGDE, PTE, PUDE,
+ };
+ use sel4_common::{
+     arch::vm_rights_t,
+@@ -29,8 +31,8 @@ enum vm_page_size {
+     ARMHugePage,
+ }
+ 
+-enum pte_tag_t {
+-    pte_table = 3,
++enum PTEag_t {
++    PTEable = 3,
+     pte_page = 1,
+     pte_4k_page = 7,
+     pte_invalid = 0,
+@@ -132,14 +134,14 @@ impl PTE {
+     }
+ 
+     pub fn is_pte_table(&self) -> bool {
+-        self.get_type() != pte_tag_t::pte_table as usize
++        self.get_type() != PTEag_t::PTEable as usize
+     }
+     pub fn get_valid(&self) -> usize {
+-        (self.get_type() != pte_tag_t::pte_invalid as usize) as usize
++        (self.get_type() != PTEag_t::pte_invalid as usize) as usize
+     }
+ 
+-    pub fn pte_table_get_present(&self) -> bool {
+-        self.get_type() != pte_tag_t::pte_table as usize
++    pub fn PTEable_get_present(&self) -> bool {
++        self.get_type() != PTEag_t::PTEable as usize
+     }
+ 
+     pub fn new_invalid() -> Self {
+@@ -200,7 +202,7 @@ impl PTE {
+                 break;
+             }
+             ptSlot = unsafe { &mut *(pt.add(GET_UPT_INDEX(vptr, i))) };
+-            if unlikely(ptSlot.pte_table_get_present()) {
++            if unlikely(ptSlot.PTEable_get_present()) {
+                 return;
+             }
+         }
+@@ -220,11 +222,9 @@ impl PTE {
+     pub fn lookup_pt_slot(&self, vptr: vptr_t) -> lookupPTSlot_ret_t {
+         let pdSlot = self.lookup_pd_slot(vptr);
+         if pdSlot.status != exception_t::EXCEPTION_NONE {
+-            let ret = unsafe {
+-                lookupPTSlot_ret_t {
+-                    status: pdSlot.status,
+-                    ptSlot: 0 as *mut PTE,
+-                }
++            let ret = lookupPTSlot_ret_t {
++                status: pdSlot.status,
++                ptSlot: 0 as *mut PTE,
+             };
+             return ret;
+         }
+@@ -242,8 +242,7 @@ impl PTE {
+             }
+         }
+         let ptIndex = GET_PT_INDEX(vptr);
+-        let pt =
+-            unsafe { paddr_to_pptr((*pdSlot.pdSlot).pde_small_ptr_get_pt_base_address()) as *mut PTE };
++        let pt = unsafe { paddr_to_pptr((*pdSlot.pdSlot).0 & 0xfffffffff000) as *mut PTE };
+ 
+         let ret = lookupPTSlot_ret_t {
+             status: exception_t::EXCEPTION_NONE,
+@@ -260,11 +259,9 @@ impl PTE {
+     pub fn lookup_pd_slot(&self, vptr: vptr_t) -> lookupPDSlot_ret_t {
+         let pudSlot: lookupPUDSlot_ret_t = self.lookup_pud_slot(vptr);
+         if pudSlot.status != exception_t::EXCEPTION_NONE {
+-            let ret = unsafe {
+-                lookupPDSlot_ret_t {
+-                    status: pudSlot.status,
+-                    pdSlot: unsafe { 0 as *mut PDE },
+-                }
++            let ret = lookupPDSlot_ret_t {
++                status: pudSlot.status,
++                pdSlot: 0 as *mut PDE,
+             };
+             return ret;
+         }
+@@ -280,7 +277,9 @@ impl PTE {
+             }
+         }
+         let pdIndex = GET_PD_INDEX(vptr);
+-        let pd = unsafe { paddr_to_pptr((*pudSlot.pudSlot).pude_pd_ptr_get_pd_base_address()) as *mut PDE };
++        let pd = unsafe {
++            paddr_to_pptr((*pudSlot.pudSlot).pude_pd_ptr_get_pd_base_address()) as *mut PDE
++        };
+ 
+         let ret = lookupPDSlot_ret_t {
+             status: exception_t::EXCEPTION_NONE,
+@@ -355,7 +354,7 @@ impl PTE {
+ 
+                     if pdSlot.get_type() == pde_tag_t::pde_small as usize {
+                         let ptSlot: &PTE = pdSlot.next_level_slice()[GET_PT_INDEX(vptr)];
+-                        if ptSlot.pte_table_get_present() {
++                        if ptSlot.PTEable_get_present() {
+                             ret.frameBase = ptSlot.pte_ptr_get_page_base_address();
+                             ret.frameSize = ARM_Small_Page;
+                             ret.valid = true;
+diff --git a/src/arch/aarch64/structures.rs b/src/arch/aarch64/structures.rs
+index 5610f7e..9b62c2a 100644
+--- a/src/arch/aarch64/structures.rs
++++ b/src/arch/aarch64/structures.rs
+@@ -1,5 +1,7 @@
+ use crate::{impl_multi, vm_attributes_t, PDE, PGDE, PTE, PUDE};
+-use sel4_common::{plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t, utils::convert_to_mut_slice, BIT};
++use sel4_common::{
++    plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t, utils::convert_to_mut_slice, BIT
++};
+ 
+ pub type hw_asid_t = u8;
+ 
+diff --git a/src/arch/aarch64/utils.rs b/src/arch/aarch64/utils.rs
+index d9f7b46..2fcbfa1 100644
+--- a/src/arch/aarch64/utils.rs
++++ b/src/arch/aarch64/utils.rs
+@@ -120,7 +120,7 @@ pub struct PGDE(usize);
+ pub struct PUDE(usize);
+ #[repr(C)]
+ #[derive(Debug, Clone)]
+-pub struct PDE(usize);
++pub struct PDE(pub usize);
+ #[repr(C)]
+ #[derive(Debug, Clone, Copy)]
+ pub struct PTE(pub usize);
+diff --git a/src/arch/riscv64/pte.rs b/src/arch/riscv64/pte.rs
+index eca7898..05d1565 100644
+--- a/src/arch/riscv64/pte.rs
++++ b/src/arch/riscv64/pte.rs
+@@ -99,7 +99,7 @@ impl PTE {
+         let mut i = 0;
+         while i < CONFIG_PT_LEVELS - 1 && pt != target_pt {
+             ptSlot = unsafe { &mut *(pt.add(RISCV_GET_PT_INDEX(vptr, i))) };
+-            if unlikely(ptSlot.is_pte_table()) {
++            if unlikely(ptSlot.is_PTEable()) {
+                 return;
+             }
+             pt = ptSlot.get_pte_from_ppn_mut() as *mut PTE;
+@@ -120,7 +120,7 @@ impl PTE {
+ 
+     ///判断是页目录节点还是叶子节点，当`valid`置1，`read``write``exec`置0时，代表为叶子节点
+     #[inline]
+-    pub fn is_pte_table(&self) -> bool {
++    pub fn is_PTEable(&self) -> bool {
+         self.get_valid() != 0
+             && !(self.get_read() != 0 || self.get_write() != 0 || self.get_execute() != 0)
+     }
+@@ -171,7 +171,7 @@ impl PTE {
+             },
+         };
+ 
+-        while unsafe { (*ret.ptSlot).is_pte_table() } && level > 0 {
++        while unsafe { (*ret.ptSlot).is_PTEable() } && level > 0 {
+             level -= 1;
+             ret.ptBitsLeft -= PT_INDEX_BITS;
+             pt = unsafe { (*ret.ptSlot).get_pte_from_ppn_mut() as *mut PTE };

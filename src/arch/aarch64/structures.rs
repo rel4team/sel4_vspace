@@ -3,8 +3,6 @@ use sel4_common::{
     plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t, utils::convert_to_mut_slice, BIT
 };
 
-pub type hw_asid_t = u8;
-
 impl vm_attributes_t {
     pub fn get_armExecuteNever(&self) -> bool {
         if (self.0 & 0x4) != 0 {
