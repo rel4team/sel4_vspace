@@ -69,26 +69,6 @@ pub(crate) static mut armKSGlobalKernelPT: PageAligned<PTE> = PageAligned::new(P
 ///
 /// Use page table in vspace_root to set the satp register.
 pub fn set_vm_root(vspace_root: &cap_t) -> Result<(), lookup_fault_t> {
-    // TODO: Implement the vspace_root check like sel4 below.
-    /*
-        cap_t threadRoot;
-        asid_t asid;
-        vspace_root_t *vspaceRoot;
-        findVSpaceForASID_ret_t find_ret;
-        threadRoot = TCB_PTR_CTE_PTR(tcb, tcbVTable)->cap;
-        if (!isValidNativeRoot(threadRoot)) {
-            setCurrentUserVSpaceRoot(ttbr_new(0, addrFromKPPtr(armKSGlobalUserVSpace)));
-            return;
-        }
-        vspaceRoot = VSPACE_PTR(cap_vtable_root_get_basePtr(threadRoot));
-        asid = cap_vtable_root_get_mappedASID(threadRoot);
-        find_ret = findVSpaceForASID(asid);
-        if (unlikely(find_ret.status != EXCEPTION_NONE || find_ret.vspace_root != vspaceRoot)) {
-            setCurrentUserVSpaceRoot(ttbr_new(0, addrFromKPPtr(armKSGlobalUserVSpace)));
-            return;
-        }
-        armv_contextSwitch(vspaceRoot, asid);
-    */
     setCurrentUserVSpaceRoot(pptr_to_paddr(vspace_root.get_pgd_base_ptr()));
     Ok(())
 }
