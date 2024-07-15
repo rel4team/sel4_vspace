@@ -7,9 +7,7 @@ use crate::{
             lookupPDSlot_ret_t, lookupPGDSlot_ret_t, lookupPTSlot_ret_t, lookupPUDSlot_ret_t,
         },
         utils::{GET_PD_INDEX, GET_PGD_INDEX, GET_PT_INDEX, GET_UPUD_INDEX},
-    },
-    asid_t, find_vspace_for_asid, lookupFrame_ret_t, pptr_to_paddr, vm_attributes_t, vptr_t, PDE,
-    PTE, PUDE,
+    }, asid_t, find_vspace_for_asid, lookupFrame_ret_t, pptr_to_paddr, vm_attributes_t, vptr_t, PDE, PGDE, PTE, PUDE
 };
 use sel4_common::{
     arch::vm_rights_t,
@@ -119,10 +117,6 @@ impl PTE {
 
     pub fn get_ppn(&self) -> usize {
         (self.0 & 0xfffffffff000) >> 10
-    }
-
-    pub fn get_type(&self) -> usize {
-        (self.0 & 0x3) | ((0x1 << 58) >> 56)
     }
 
     pub fn as_pgde(&self) -> PGDE {

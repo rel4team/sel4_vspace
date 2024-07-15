@@ -3,7 +3,7 @@ use core::ops::{Deref, DerefMut};
 use super::utils::{kpptr_to_paddr, GET_KPT_INDEX};
 use super::{machine::*, pte::PTEFlags};
 use crate::{
-    ap_from_vm_rights, asid_t, pptr_t, pptr_to_paddr, PTE, vm_attributes_t, vptr_t, PDE, PUDE,
+    ap_from_vm_rights, asid_t, findVSpaceForASID, find_vspace_for_asid, pptr_t, pptr_to_paddr, vm_attributes_t, vptr_t, PDE, PTE, PUDE, TCB_PTR_CTE_PTR
 };
 use sel4_common::arch::config::PPTR_BASE;
 use sel4_common::structures::exception_t;
@@ -222,14 +222,14 @@ pub fn setVMRootForFlush(vspace: usize, asid: asid_t) -> bool {
     return true;
 }
 
-pub fn pageUpperDirectoryMapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> Option<*mut pte_t> {
+pub fn pageUpperDirectoryMapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> Option<*mut PTE> {
     let find_ret = findVSpaceForASID(asid);
     if find_ret.status != exception_t::EXCEPTION_NONE {
         return None;
     }
 
     let lu_ret =
-        convert_to_type_ref::<pte_t>(find_ret.vspace_root.unwrap() as usize).lookup_pgd_slot(vaddr);
+        convert_to_type_ref::<PTE>(find_ret.vspace_root.unwrap() as usize).lookup_pgd_slot(vaddr);
 
     if lu_ret.status != exception_t::EXCEPTION_NONE {
         return None;
@@ -245,14 +245,14 @@ pub fn pageUpperDirectoryMapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> Opti
     None
 }
 
-pub fn pageDirectoryMapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*mut pte_t> {
-    let find_ret = findVSpaceForASID(asid);
+pub fn pageDirectoryMapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*mut PTE> {
+    let find_ret = find_vspace_for_asid(asid);
     if find_ret.status != exception_t::EXCEPTION_NONE {
         return None;
     }
 
     let lu_ret =
-        convert_to_type_ref::<pte_t>(find_ret.vspace_root.unwrap() as usize).lookup_pud_slot(vaddr);
+        convert_to_type_ref::<PTE>(find_ret.vspace_root.unwrap() as usize).lookup_pud_slot(vaddr);
 
     if lu_ret.status != exception_t::EXCEPTION_NONE {
         return None;
@@ -268,14 +268,14 @@ pub fn pageDirectoryMapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*mut
     None
 }
 
-pub fn pageTableMapped(asid: asid_t, vaddr: vptr_t, pt: &pte_t) -> Option<*mut pte_t> {
+pub fn pageTableMapped(asid: asid_t, vaddr: vptr_t, pt: &PTE) -> Option<*mut PTE> {
     let find_ret = findVSpaceForASID(asid);
     if find_ret.status != exception_t::EXCEPTION_NONE {
         return None;
     }
 
     let lu_ret =
-        convert_to_type_ref::<pte_t>(find_ret.vspace_root.unwrap() as usize).lookup_pd_slot(vaddr);
+        convert_to_type_ref::<PTE>(find_ret.vspace_root.unwrap() as usize).lookup_pd_slot(vaddr);
 
     if lu_ret.status != exception_t::EXCEPTION_NONE {
         return None;
@@ -283,7 +283,7 @@ pub fn pageTableMapped(asid: asid_t, vaddr: vptr_t, pt: &pte_t) -> Option<*mut p
 
     let pde = unsafe { (*lu_ret.pdSlot).as_pde() };
     if pde.small_ptr_get_present()
-        && pde.pde_small_ptr_get_pt_base_address() == pptr_to_paddr(pt as *const pte_t as usize)
+        && pde.pde_small_ptr_get_pt_base_address() == pptr_to_paddr(pt as *const PTE as usize)
     {
         return Some(lu_ret.pdSlot);
     }
