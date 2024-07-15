@@ -7,17 +7,20 @@ use sel4_common::{
 };
 use sel4_cspace::arch::cap_t;
 
-use crate::{asid_map_t, asid_pool_t, findVSpaceForASID_ret, PTE};
+use crate::{asid_map_t, asid_pool_t, asid_t, findVSpaceForASID_ret, set_vm_root, PTE};
+
+use super::machine::invalidate_local_tlb_asid;
 
 pub const asid_map_asid_map_none: usize = 0;
 pub const asid_map_asid_map_vspace: usize = 1;
 
-pub(crate) const armKSASIDTable: [usize; BIT!(asidHighBits)] = [0; BIT!(asidHighBits)];
+pub(crate) static mut armKSASIDTable: [usize; BIT!(asidHighBits)] = [0; BIT!(asidHighBits)];
 
 #[no_mangle]
 pub fn find_map_for_asid(asid: usize) -> asid_map_t {
-    let poolPtr =
-        convert_to_option_mut_type_ref::<asid_pool_t>(armKSASIDTable[asid >> asidLowBits]);
+    let poolPtr = unsafe {
+        convert_to_option_mut_type_ref::<asid_pool_t>(armKSASIDTable[asid >> asidLowBits])
+    };
     if let Some(pool) = poolPtr {
         return pool.asid_map_slice()[asid & MASK!(asidLowBits)];
     }
@@ -43,28 +46,50 @@ pub fn find_vspace_for_asid(asid: usize) -> findVSpaceForASID_ret {
 }
 
 #[no_mangle]
-pub fn delete_asid(asid: usize, vspace: *mut PTE, cap: &cap_t)->Result<(), lookup_fault_t> {
-    let ptr = convert_to_option_mut_type_ref::<asid_pool_t>(armKSASIDTable[asid >> asidLowBits]);
+pub fn delete_asid(asid: usize, vspace: *mut PTE, cap: &cap_t) -> Result<(), lookup_fault_t> {
+    let ptr = unsafe {
+        convert_to_option_mut_type_ref::<asid_pool_t>(armKSASIDTable[asid >> asidLowBits])
+    };
     if let Some(pool) = ptr {
-        // let asid_map = convert_to_mut_type_ref()
         let asid_map: asid_map_t = pool.asid_map_slice()[asid & MASK!(asidLowBits)];
-        if asid_map.get_type() == asid_map_asid_map_vspace {}
+        if asid_map.get_type() == asid_map_asid_map_vspace
+            && asid_map.get_vspace_root() == vspace as usize
+        {
+            invalidate_local_tlb_asid(asid);
+            pool.set_asid_map(asid & MASK!(asidLowBits), asid_map_t::new_none());
+            return set_vm_root(cap);
+        }
     }
     Ok(())
 }
-// void deleteASID(asid_t asid, vspace_root_t *vspace)
-// {
-//     asid_pool_t *poolPtr;
 
-//     poolPtr = armKSASIDTable[asid >> asidLowBits];
+#[no_mangle]
+pub fn delete_asid_pool(
+    asid_base: asid_t,
+    pool: *mut asid_pool_t,
+    default_vspace_cap: &cap_t,
+) -> Result<(), lookup_fault_t> {
+    let pool_in_table = unsafe { armKSASIDTable[asid_base >> asidLowBits] };
+    if pool as usize == pool_in_table {
+        // clear all asid in target asid pool
+        let pool = convert_to_mut_type_ref::<asid_pool_t>(pool_in_table);
+        for offset in 0..BIT!(asidLowBits) {
+            let asid_map = pool.get_asid_map(offset);
+            if asid_map.get_type() == asid_map_asid_map_vspace {
+                invalidate_local_tlb_asid(asid_base + offset);
+            }
+        }
+        unsafe {
+            armKSASIDTable[asid_base >> asidLowBits] = 0;
+        }
+        return set_vm_root(default_vspace_cap);
+    }
+    Ok(())
+}
 
-//     if (poolPtr != NULL) {
-//         asid_map_t asid_map = poolPtr->array[asid & MASK(asidLowBits)];
-//         if (asid_map_get_type(asid_map) == asid_map_asid_map_vspace &&
-//             (vspace_root_t *)asid_map_asid_map_vspace_get_vspace_root(asid_map) == vspace) {
-//             invalidateTLBByASID(asid);
-//             poolPtr->array[asid & MASK(asidLowBits)] = asid_map_asid_map_none_new();
-//             setVMRoot(NODE_STATE(ksCurThread));
-//         }
-//     }
-// }
+pub fn set_asid_pool_by_index(index: usize, pool_ptr: usize) {
+    // assert!(index < BIT!(asidHighBits));
+    unsafe {
+        armKSASIDTable[index] = pool_ptr;
+    }
+}

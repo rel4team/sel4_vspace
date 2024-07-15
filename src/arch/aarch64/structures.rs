@@ -1,4 +1,4 @@
-use crate::{impl_multi, PTE, vm_attributes_t};
+use crate::{impl_multi, vm_attributes_t, PTE};
 use sel4_common::{
     plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t,
     utils::convert_to_mut_slice, BIT,
@@ -68,10 +68,20 @@ pub(super) fn asid_pool_slice<T>(addr: usize) -> &'static mut [T] {
     convert_to_mut_slice::<T>(addr, asidLowBits)
 }
 
-impl_multi!(asid_pool_t{
+impl_multi!(asid_pool_t {
     #[inline]
-    pub fn asid_map_slice<T>(&self)->&'static mut [T]{
+    pub fn asid_map_slice<T>(&self) -> &'static mut [T] {
         asid_pool_slice(self.0)
+    }
+
+    #[inline]
+    pub fn get_asid_map(&self, idx: usize) -> asid_map_t {
+        self.asid_map_slice()[idx]
+    }
+
+    #[inline]
+    pub fn set_asid_map(&self, idx: usize, val: asid_map_t) {
+        self.asid_map_slice()[idx] = val;
     }
 });
 
