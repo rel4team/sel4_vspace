@@ -60,15 +60,3 @@ pub fn pptr_to_paddr(x: usize) -> usize {
 pub fn paddr_to_pptr(x: usize) -> usize {
     x + PPTR_BASE_OFFSET
 }
-
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct PTE(pub usize);
-
-impl PTE {
-    #[inline]
-    pub fn get_ptr(&self) -> usize {
-        self as *const Self as usize
-    }
-}

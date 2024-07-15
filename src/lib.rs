@@ -10,7 +10,7 @@ mod asid;
 mod boot;
 pub mod interface;
 mod pagetable;
-// mod pte;
+mod pte;
 mod structures;
 mod utils;
 
@@ -22,7 +22,7 @@ pub use asid::*;
 pub use boot::*;
 pub use interface::unmapPage;
 pub use pagetable::PageTable;
-// pub use pte::PTE;
+pub use pte::pte_t;
 pub use structures::*;
 pub use utils::checkVPAlignment;
 // pub use riscv::*;

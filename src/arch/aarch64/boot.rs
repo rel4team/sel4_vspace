@@ -1,24 +1,11 @@
 use sel4_common::{
-    arch::{
-        config::{PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_TOP},
-        vm_rights_t,
-    },
-    sel4_config::{seL4_LargePageBits, ARM_Large_Page, ARM_Small_Page, PT_INDEX_BITS},
-    utils::{convert_to_mut_type_ptr, convert_to_mut_type_ref},
-    BIT,
+    arch::vm_rights_t,
+    sel4_config::{ARM_Large_Page, ARM_Small_Page},
+    utils::convert_to_mut_type_ref,
 };
 use sel4_cspace::arch::cap_t;
 
-use crate::{
-    arch::{aarch64::utils::GET_PGD_INDEX, VAddr},
-    asid_t, kpptr_to_paddr, paddr_to_pptr, pde_t, pgde_t, pptr_t, pptr_to_paddr, pude_t,
-    vm_attributes_t, vptr_t, PTEFlags, GET_KPT_INDEX, GET_PD_INDEX, GET_PT_INDEX, GET_UPUD_INDEX,
-    PDE, PGDE, PTE, PUDE,
-};
-
-use super::interface::{
-    armKSGlobalKernelPDs, armKSGlobalKernelPGD, armKSGlobalKernelPT, armKSGlobalKernelPUD,
-};
+use crate::{arch::VAddr, asid_t, pptr_t, pptr_to_paddr, pte_t, vptr_t, PDE, PGDE, PTE, PUDE};
 
 use super::page_slice;
 
@@ -26,93 +13,10 @@ use super::page_slice;
 enum find_type {
     pde_t,
     pude_t,
-    PTE,
+    pte_t,
 }
 
 /// TODO: Write the comments.
-pub(crate) enum mair_types {
-    DEVICE_nGnRnE = 0,
-    DEVICE_nGnRE = 1,
-    DEVICE_GRE = 2,
-    NORMAL_NC = 3,
-    NORMAL = 4,
-    NORMAL_WT = 5,
-}
-
-pub const RESERVED: usize = 3;
-
-#[no_mangle]
-#[link_section = ".boot.text"]
-pub fn rust_map_kernel_window() {
-    unsafe {
-        armKSGlobalKernelPGD[GET_KPT_INDEX(PPTR_BASE, 0)] =
-            PTE::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPUD.as_ptr() as usize), true);
-    }
-
-    let mut idx = GET_KPT_INDEX(PPTR_BASE, 1);
-    while idx < GET_KPT_INDEX(PPTR_TOP, 1) {
-        unsafe {
-            armKSGlobalKernelPUD[idx] = PTE::pte_next_table(
-                kpptr_to_paddr(armKSGlobalKernelPDs[idx].as_ptr() as usize),
-                true,
-            );
-        }
-        idx += 1;
-    }
-
-    let mut vaddr = PPTR_BASE;
-    let mut paddr = PADDR_BASE;
-    while paddr < PADDR_TOP {
-        unsafe {
-            let flag = PTEFlags::UXN | PTEFlags::AF | PTEFlags::NORMAL;
-            armKSGlobalKernelPDs[GET_KPT_INDEX(vaddr, 1)][GET_KPT_INDEX(vaddr, 2)] =
-                PTE::new(paddr, flag);
-            vaddr += BIT!(seL4_LargePageBits);
-            paddr += BIT!(seL4_LargePageBits)
-        }
-    }
-
-    unsafe {
-        armKSGlobalKernelPUD[GET_KPT_INDEX(PPTR_TOP, 1)] = PTE::pte_next_table(
-            kpptr_to_paddr(armKSGlobalKernelPDs[BIT!(PT_INDEX_BITS) - 1].as_ptr() as usize),
-            true,
-        );
-        armKSGlobalKernelPDs[BIT!(PT_INDEX_BITS) - 1][BIT!(PT_INDEX_BITS) - 1] =
-            PTE::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPT.as_ptr() as usize), true);
-    }
-}
-
-#[no_mangle]
-pub fn map_kernel_frame(
-    paddr: usize,
-    vaddr: usize,
-    vm_rights: vm_rights_t,
-    attributes: vm_attributes_t,
-) {
-    let uxn = 1;
-    let attr_index: usize;
-    let shareable: usize;
-    if attributes.get_page_cacheable() != 0 {
-        attr_index = mair_types::NORMAL as usize;
-        shareable = 0;
-    } else {
-        attr_index = mair_types::DEVICE_nGnRnE as usize;
-        shareable = 0;
-    }
-    unsafe {
-        armKSGlobalKernelPT[GET_PT_INDEX(vaddr)] = PTE::pte_new(
-            uxn,
-            paddr,
-            0,
-            1,
-            shareable,
-            PTE::ap_from_vm_rights_t(vm_rights).bits() >> 6,
-            attr_index,
-            RESERVED,
-        )
-    }
-}
-
 #[no_mangle]
 #[link_section = ".boot.text"]
 pub fn map_it_pt_cap(vspace_cap: &cap_t, pt_cap: &cap_t) {
@@ -137,7 +41,7 @@ pub fn map_it_pd_cap(vspace_cap: &cap_t, pd_cap: &cap_t) {
     // TODO: move 0x3 into a proper position.
     assert_eq!(pgd[vptr.pgd_index()].attr(), 0x3);
     let pud = pgd[vptr.pgd_index()].next_level_slice::<PUDE>();
-    pud[vptr.pud_index()] = PUDE::new_page(pptr_to_paddr(pd_addr), 0x3);
+    pud[vptr.pud_index()] = PUDE::new(pptr_to_paddr(pd_addr), 0x3);
 }
 
 /// TODO: Write the comments.
@@ -148,7 +52,7 @@ pub fn map_it_pud_cap(vspace_cap: &cap_t, pud_cap: &cap_t) {
     assert_eq!(pud_cap.get_pud_is_mapped(), 1);
 
     // TODO: move 0x3 into a proper position.
-    pgd[vptr.pgd_index()] = PGDE::new_page(pptr_to_paddr(pud_addr), 0x3);
+    pgd[vptr.pgd_index()] = PGDE::new(pptr_to_paddr(pud_addr), 0x3);
 }
 
 /// TODO: Write the comments.
@@ -158,11 +62,11 @@ pub fn map_it_frame_cap(vspace_cap: &cap_t, frame_cap: &cap_t, exec: bool) {
     let pte = convert_to_mut_type_ref::<PTE>(find_pt(
         vspace_cap.get_cap_ptr(),
         frame_cap.get_frame_mapped_address().into(),
-        find_type::PTE,
+        find_type::pte_t,
     ));
     // TODO: Make set_attr usage more efficient.
     // TIPS: exec true will be cast to 1 and false to 0.
-    pte.set_attr(PTE::pte_new((!exec) as usize, 0, 1, 1, 0, 1, 0, 3).0);
+    pte.set_attr(pte_t::pte_new((!exec) as usize, 0, 1, 1, 0, 1, 0, 3).0);
     pte.set_next_level_paddr(pptr_to_paddr(frame_cap.get_frame_base_ptr()));
 }
 
@@ -179,7 +83,7 @@ fn find_pt(vspace_root: usize, vptr: VAddr, ftype: find_type) -> usize {
         return pd[vptr.pd_index()].self_addr();
     }
     let pt = pd[vptr.pd_index()].next_level_slice::<PTE>();
-    assert_eq!(ftype, find_type::PTE);
+    assert_eq!(ftype, find_type::pte_t);
     pt[vptr.pt_index()].self_addr()
 }
 

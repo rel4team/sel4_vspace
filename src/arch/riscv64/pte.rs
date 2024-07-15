@@ -11,7 +11,7 @@ use sel4_common::{
 
 use crate::{
     arch::riscv64::{sfence, utils::RISCV_GET_PT_INDEX},
-    asid_t, find_vspace_for_asid, lookupPTSlot_ret_t, PTE, vptr_t,
+    asid_t, find_vspace_for_asid, lookupPTSlot_ret_t, pte_t, vptr_t,
 };
 
 use super::paddr_to_pptr;
@@ -36,13 +36,13 @@ bitflags! {
     }
 }
 
-impl From<usize> for PTE {
+impl From<usize> for pte_t {
     fn from(value: usize) -> Self {
         Self(value)
     }
 }
 
-impl PTE {
+impl pte_t {
     #[inline]
     pub fn new(ppn: usize, flags: PTEFlags) -> Self {
         Self(flags.bits() | (ppn << 10))
@@ -88,7 +88,7 @@ impl PTE {
     }
 
     pub fn unmap_page_table(&mut self, asid: asid_t, vptr: vptr_t) {
-        let target_pt = self as *mut PTE;
+        let target_pt = self as *mut pte_t;
         let find_ret = find_vspace_for_asid(asid);
         if find_ret.status != exception_t::EXCEPTION_NONE {
             return;
@@ -102,14 +102,14 @@ impl PTE {
             if unlikely(ptSlot.is_pte_table()) {
                 return;
             }
-            pt = ptSlot.get_pte_from_ppn_mut() as *mut PTE;
+            pt = ptSlot.get_pte_from_ppn_mut() as *mut pte_t;
             i += 1;
         }
 
         if pt != target_pt {
             return;
         }
-        *ptSlot = PTE::new(0, PTEFlags::empty());
+        *ptSlot = pte_t::new(0, PTEFlags::empty());
         sfence();
     }
 
@@ -127,12 +127,12 @@ impl PTE {
 
     #[inline]
     pub fn get_pte_from_ppn_mut(&self) -> &'static mut Self {
-        convert_to_mut_type_ref::<PTE>(paddr_to_pptr(self.get_ppn() << seL4_PageTableBits))
+        convert_to_mut_type_ref::<pte_t>(paddr_to_pptr(self.get_ppn() << seL4_PageTableBits))
     }
 
     #[inline]
     pub fn get_pte_from_ppn(&self) -> &'static Self {
-        convert_to_type_ref::<PTE>(paddr_to_pptr(self.get_ppn() << seL4_PageTableBits))
+        convert_to_type_ref::<pte_t>(paddr_to_pptr(self.get_ppn() << seL4_PageTableBits))
     }
 
     #[inline]
@@ -163,7 +163,7 @@ impl PTE {
     ///用于记录某个虚拟地址`vptr`对应的pte表项在内存中的位置
     pub fn lookup_pt_slot(&self, vptr: vptr_t) -> lookupPTSlot_ret_t {
         let mut level = CONFIG_PT_LEVELS - 1;
-        let mut pt = self as *const PTE as usize as *mut PTE;
+        let mut pt = self as *const pte_t as usize as *mut pte_t;
         let mut ret = lookupPTSlot_ret_t {
             ptBitsLeft: PT_INDEX_BITS * level + seL4_PageBits,
             ptSlot: unsafe {
@@ -174,7 +174,7 @@ impl PTE {
         while unsafe { (*ret.ptSlot).is_pte_table() } && level > 0 {
             level -= 1;
             ret.ptBitsLeft -= PT_INDEX_BITS;
-            pt = unsafe { (*ret.ptSlot).get_pte_from_ppn_mut() as *mut PTE };
+            pt = unsafe { (*ret.ptSlot).get_pte_from_ppn_mut() as *mut pte_t };
             ret.ptSlot = unsafe { pt.add((vptr >> ret.ptBitsLeft) & MASK!(PT_INDEX_BITS)) };
         }
         ret

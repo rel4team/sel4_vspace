@@ -3,7 +3,7 @@ use core::intrinsics::unlikely;
 use sel4_common::{fault::lookup_fault_t, structures::exception_t, utils::convert_to_mut_type_ref};
 use sel4_cspace::interface::{cap_t, CapTag};
 
-use crate::PTE;
+use crate::pte_t;
 
 use super::{kpptr_to_paddr, pagetable::kernel_root_pageTable, pptr_to_paddr, setVSpaceRoot};
 
@@ -17,7 +17,7 @@ pub fn set_vm_root(vspace_root: &cap_t) -> Result<(), lookup_fault_t> {
             return Ok(());
         }
     }
-    let lvl1pt = convert_to_mut_type_ref::<PTE>(vspace_root.get_pt_base_ptr());
+    let lvl1pt = convert_to_mut_type_ref::<pte_t>(vspace_root.get_pt_base_ptr());
     let asid = vspace_root.get_pt_mapped_asid();
     let find_ret = find_vspace_for_asid(asid);
     let mut ret = Ok(());
@@ -33,6 +33,6 @@ pub fn set_vm_root(vspace_root: &cap_t) -> Result<(), lookup_fault_t> {
             setVSpaceRoot(kpptr_to_paddr(kernel_root_pageTable.as_ptr() as usize), 0);
         }
     }
-    setVSpaceRoot(pptr_to_paddr(lvl1pt as *mut PTE as usize), asid);
+    setVSpaceRoot(pptr_to_paddr(lvl1pt as *mut pte_t as usize), asid);
     ret
 }
