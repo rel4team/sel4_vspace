@@ -11,7 +11,7 @@ use sel4_common::{
 
 use crate::{
     arch::riscv64::{sfence, utils::RISCV_GET_PT_INDEX},
-    asid_t, find_vspace_for_asid, lookupPTSlot_ret_t, PTE, vptr_t,
+    asid_t, find_vspace_for_asid, lookupPTSlot_ret_t, vptr_t, PTE,
 };
 
 use super::paddr_to_pptr;

@@ -1,4 +1,4 @@
-use crate::{paddr_t, PTE, PageTable};
+use crate::{paddr_t, PageTable, PTE};
 use sel4_common::{
     arch::config::{
         KERNEL_ELF_BASE, KERNEL_ELF_PADDR_BASE, PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_BASE_OFFSET,

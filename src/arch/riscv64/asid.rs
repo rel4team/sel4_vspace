@@ -9,7 +9,7 @@ use sel4_common::{
 };
 use sel4_cspace::arch::cap_t;
 
-use crate::{asid_pool_t, asid_t, findVSpaceForASID_ret, pptr_t, PTE, set_vm_root};
+use crate::{asid_pool_t, asid_t, findVSpaceForASID_ret, pptr_t, set_vm_root, PTE};
 
 ///存放`asid pool`的数组，每一个下标对应一个`asid pool`，
 ///一个`asid pool`可以存放`asidLowBits`个asid值
