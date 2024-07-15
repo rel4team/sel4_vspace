@@ -5,30 +5,30 @@ use sel4_common::{
 };
 use sel4_cspace::arch::cap_t;
 
-use crate::{pptr_to_paddr, pte_t, sfence, PTEFlags};
+use crate::{pptr_t, pptr_to_paddr, PTE, sfence, PTEFlags};
 
 #[no_mangle]
 #[link_section = ".boot.text"]
 pub fn map_it_pt_cap(_vspace_cap: &cap_t, _pt_cap: &cap_t) {
     let vptr = _pt_cap.get_pt_mapped_address();
-    let lvl1pt = convert_to_mut_type_ref::<pte_t>(_vspace_cap.get_cap_ptr());
+    let lvl1pt = convert_to_mut_type_ref::<PTE>(_vspace_cap.get_cap_ptr());
     let pt = _pt_cap.get_cap_ptr();
     let pt_ret = lvl1pt.lookup_pt_slot(vptr);
-    let targetSlot = convert_to_mut_type_ref::<pte_t>(pt_ret.ptSlot as usize);
-    *targetSlot = pte_t::new(pptr_to_paddr(pt) >> seL4_PageBits, PTEFlags::V);
+    let targetSlot = convert_to_mut_type_ref::<PTE>(pt_ret.ptSlot as usize);
+    *targetSlot = PTE::new(pptr_to_paddr(pt) >> seL4_PageBits, PTEFlags::V);
     sfence();
 }
 
 #[no_mangle]
 pub fn map_it_frame_cap(_vspace_cap: &cap_t, _frame_cap: &cap_t) {
     let vptr = _frame_cap.get_frame_mapped_address();
-    let lvl1pt = convert_to_mut_type_ref::<pte_t>(_vspace_cap.get_cap_ptr());
+    let lvl1pt = convert_to_mut_type_ref::<PTE>(_vspace_cap.get_cap_ptr());
     let frame_pptr: usize = _frame_cap.get_cap_ptr();
     let pt_ret = lvl1pt.lookup_pt_slot(vptr);
 
-    let targetSlot = convert_to_mut_type_ref::<pte_t>(pt_ret.ptSlot as usize);
+    let targetSlot = convert_to_mut_type_ref::<PTE>(pt_ret.ptSlot as usize);
 
-    *targetSlot = pte_t::new(
+    *targetSlot = PTE::new(
         pptr_to_paddr(frame_pptr) >> seL4_PageBits,
         PTEFlags::ADUVRWX,
     );
@@ -61,4 +61,8 @@ pub fn create_mapped_it_frame_cap(
     );
     map_it_frame_cap(pd_cap, &cap);
     cap
+}
+
+pub fn create_unmapped_it_frame_cap(pptr: pptr_t, _use_large: bool) -> cap_t {
+    cap_t::new_frame_cap(0, pptr, 0, 0, 0, 0)
 }

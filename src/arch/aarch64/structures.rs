@@ -1,4 +1,4 @@
-use crate::{pte_t, vm_attributes_t, PDE, PGDE, PTE, PUDE};
+use crate::{vm_attributes_t, PDE, PGDE, PTE, PUDE};
 use sel4_common::structures::exception_t;
 
 pub type hw_asid_t = u8;
