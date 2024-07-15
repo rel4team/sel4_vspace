@@ -1,9 +1,11 @@
+use core::intrinsics::unlikely;
 use core::ops::{Deref, DerefMut};
 
 use super::machine::*;
+use super::pte::vm_page_size;
 use crate::{
-    ap_from_vm_rights, asid_t, find_map_for_asid, pptr_t, pptr_to_paddr, vm_attributes_t, vptr_t,
-    PDE, PGDE, PTE, PUDE,
+    ap_from_vm_rights, asid_t, find_map_for_asid, find_vspace_for_asid, pptr_t, pptr_to_paddr,
+    vm_attributes_t, vptr_t, PDE, PGDE, PTE, PUDE,
 };
 use sel4_common::arch::config::PPTR_BASE;
 use sel4_common::structures::exception_t;
@@ -77,10 +79,6 @@ pub fn activate_kernel_window() {
     todo!()
 }
 
-pub fn unmap_page_table(asid: asid_t, vaddr: vptr_t, pt: &mut PTE) {
-    pt.unmap_page_table(asid, vaddr);
-}
-
 #[no_mangle]
 #[link_section = ".boot.text"]
 pub fn activate_kernel_vspace() {
@@ -144,6 +142,7 @@ pub fn makeUser3rdLevel(paddr: pptr_t, vm_rights: vm_rights_t, attributes: vm_at
     )
 }
 
+#[no_mangle]
 pub fn set_vm_root_for_flush_with_thread_root(
     vspace: usize,
     asid: asid_t,
@@ -164,13 +163,13 @@ pub fn set_vm_root_for_flush_with_thread_root(
 pub fn page_upper_directory_mapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> Option<*mut PGDE> {
     match find_map_for_asid(asid) {
         Some(asid_map) => {
-            let look_up_ret =
+            let lookup_ret =
                 convert_to_type_ref::<PTE>(asid_map.get_vspace_root()).lookup_pgd_slot(vaddr);
-            if look_up_ret.status != exception_t::EXCEPTION_NONE {
+            if lookup_ret.status != exception_t::EXCEPTION_NONE {
                 return None;
             }
 
-            let slot = unsafe { &mut (*look_up_ret.pgdSlot) };
+            let slot = unsafe { &mut (*lookup_ret.pgdSlot) };
 
             if !slot.get_present()
                 || slot.get_pud_base_address() != pptr_to_paddr(pud as *const _ as _)
@@ -187,13 +186,13 @@ pub fn page_upper_directory_mapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> O
 pub fn page_directory_mapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*mut PUDE> {
     match find_map_for_asid(asid) {
         Some(asid_map) => {
-            let look_up_ret =
+            let lookup_ret =
                 convert_to_type_ref::<PTE>(asid_map.get_vspace_root()).lookup_pud_slot(vaddr);
-            if look_up_ret.status != exception_t::EXCEPTION_NONE {
+            if lookup_ret.status != exception_t::EXCEPTION_NONE {
                 return None;
             }
 
-            let slot = unsafe { &mut (*look_up_ret.pudSlot) };
+            let slot = unsafe { &mut (*lookup_ret.pudSlot) };
 
             if !slot.get_present()
                 || slot.get_pd_base_address() != pptr_to_paddr(pd as *const _ as _)
@@ -210,13 +209,13 @@ pub fn page_directory_mapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*m
 pub fn page_table_mapped(asid: asid_t, vaddr: vptr_t, pt: &PTE) -> Option<*mut PDE> {
     match find_map_for_asid(asid) {
         Some(asid_map) => {
-            let look_up_ret =
+            let lookup_ret =
                 convert_to_type_ref::<PTE>(asid_map.get_vspace_root()).lookup_pd_slot(vaddr);
-            if look_up_ret.status != exception_t::EXCEPTION_NONE {
+            if lookup_ret.status != exception_t::EXCEPTION_NONE {
                 return None;
             }
 
-            let slot = unsafe { &mut (*look_up_ret.pdSlot) };
+            let slot = unsafe { &mut (*lookup_ret.pdSlot) };
 
             if !slot.get_present()
                 || slot.get_pt_base_address() != pptr_to_paddr(pt as *const _ as _)
@@ -231,11 +230,112 @@ pub fn page_table_mapped(asid: asid_t, vaddr: vptr_t, pt: &PTE) -> Option<*mut P
 }
 
 #[inline]
-pub fn invalidateTLBByASID(asid: asid_t) {
+pub fn invalidate_tlb_by_asid(asid: asid_t) {
     invalidate_local_tlb_asid(asid);
 }
 
 #[inline]
-pub fn invalidateTLBByASIDVA(asid: asid_t, vaddr: vptr_t) {
+pub fn invalidate_tlb_by_asid_va(asid: asid_t, vaddr: vptr_t) {
     invalidate_local_tlb_va_asid((asid << 48) | vaddr >> seL4_PageBits);
+}
+
+pub fn unmap_page_upper_directory(asid: asid_t, vaddr: vptr_t, pud: &PUDE) {
+    match page_upper_directory_mapped(asid, vaddr, pud) {
+        Some(slot) => {
+            let slot = unsafe { &mut (*slot) };
+            slot.invalidate();
+            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+            invalidate_tlb_by_asid(asid);
+        }
+        None => {}
+    }
+}
+
+pub fn unmap_page_directory(asid: asid_t, vaddr: vptr_t, pd: &PDE) {
+    match page_directory_mapped(asid, vaddr, pd) {
+        Some(slot) => {
+            let slot = unsafe { &mut (*slot) };
+            slot.invalidate();
+            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+            invalidate_tlb_by_asid(asid);
+        }
+        None => {}
+    }
+}
+
+pub fn unmap_page_table(asid: asid_t, vaddr: vptr_t, pt: &PTE) {
+    match page_table_mapped(asid, vaddr, pt) {
+        Some(slot) => {
+            let slot = unsafe { &mut (*slot) };
+            slot.invalidate();
+            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+            invalidate_tlb_by_asid(asid);
+        }
+        None => {}
+    }
+}
+
+pub fn unmap_page(page_size: vm_page_size, asid: asid_t, vptr: vptr_t, pptr: pptr_t) {
+    let find_ret = find_vspace_for_asid(asid);
+    if unlikely(find_ret.status != exception_t::EXCEPTION_NONE) {
+        return;
+    }
+
+    match page_size {
+        vm_page_size::ARMSmallPage => {
+            if find_ret.vspace_root.is_none() {
+                return;
+            }
+
+            let lookup_ret = unsafe { (*find_ret.vspace_root.unwrap()).lookup_pt_slot(vptr) };
+            if unlikely(lookup_ret.status != exception_t::EXCEPTION_NONE) {
+                return;
+            }
+
+            let slot = unsafe { &mut (*lookup_ret.ptSlot) };
+
+            // 当前页表项不是有效的页表项或者不是要unmap的页
+            if !slot.pte_ptr_get_present()
+                || slot.pte_ptr_get_page_base_address() != pptr_to_paddr(pptr)
+            {
+                return;
+            }
+
+            slot.invalidate();
+            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+        }
+        vm_page_size::ARMLargePage => {
+            let lookup_ret = unsafe { (*find_ret.vspace_root.unwrap()).lookup_pd_slot(vptr) };
+            if unlikely(lookup_ret.status != exception_t::EXCEPTION_NONE) {
+                return;
+            }
+
+            let slot = unsafe { &mut (*lookup_ret.pdSlot) };
+
+            if !slot.get_present() || slot.get_pt_base_address() != pptr_to_paddr(pptr) {
+                return;
+            }
+
+            slot.invalidate();
+            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+        }
+        vm_page_size::ARMHugePage => {
+            let lookup_ret = unsafe { (*find_ret.vspace_root.unwrap()).lookup_pud_slot(vptr) };
+            if unlikely(lookup_ret.status != exception_t::EXCEPTION_NONE) {
+                return;
+            }
+
+            let slot = unsafe { &mut (*lookup_ret.pudSlot) };
+
+            if !slot.get_present() || slot.get_pd_base_address() != pptr_to_paddr(pptr) {
+                return;
+            }
+
+            slot.invalidate();
+            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+        }
+    }
+
+    assert!(asid < BIT!(16));
+    invalidate_tlb_by_asid_va(asid, vptr);
 }

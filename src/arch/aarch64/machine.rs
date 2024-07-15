@@ -82,43 +82,41 @@ pub fn dmb() {
 }
 
 // TIPS: please use const to make code cleaner and faster.
-pub const fn LOUU(x: usize) -> usize {
-    (x >> 27) & MASK!(3)
-}
 
-pub fn cleanCacheRange_RAM(start: usize, end: usize, pstart: usize) {
-    cleanCacheRange_PoC(start, end, pstart);
+pub fn clean_cache_range_ram(start: usize, end: usize, pstart: usize) {
+    clean_cache_range_poc(start, end, pstart);
 
     dsb();
 
-    plat_cleanL2Range(pstart, pstart + (end - start));
+    plat_clean_l2_range(pstart, pstart + (end - start));
 }
 
-pub fn cleanCacheRange_PoC(start: usize, end: usize, pstart: usize) {}
+pub fn clean_cache_range_poc(start: usize, end: usize, pstart: usize) {}
 
-pub fn plat_cleanL2Range(pstart: usize, pend: usize) {}
+pub fn plat_clean_l2_range(pstart: usize, pend: usize) {}
 
-fn LOC(x: usize) -> usize {
+#[inline]
+const fn loc(x: usize) -> usize {
     (x >> 24) & MASK!(3)
 }
 
-fn LOUIS(x: usize) -> usize {
-    (x >> 21) & MASK!(3)
-}
-
-fn CTYPE(x: usize, n: usize) -> usize {
+#[inline]
+const fn ctype(x: usize, n: usize) -> usize {
     (x >> (n * 3)) & MASK!(3)
 }
 
-fn LINEBITS(s: usize) -> usize {
+#[inline]
+const fn line_bits(s: usize) -> usize {
     (s & MASK!(3)) + 4
 }
 
-fn ASSOC(s: usize) -> usize {
+#[inline]
+const fn assoc(s: usize) -> usize {
     ((s >> 3) & MASK!(10)) + 1
 }
 
-fn NSETS(s: usize) -> usize {
+#[inline]
+const fn nsets(s: usize) -> usize {
     ((s >> 13) & MASK!(15)) + 1
 }
 
@@ -130,38 +128,38 @@ pub enum arm_cache_type {
 
 pub fn clean_invalidate_l1_caches() {
     dsb();
-    clean_invalidate_D_PoC();
+    clean_invalidate_d_poc();
     dsb();
-    invalidate_I_PoU();
+    invalidate_i_pou();
     dsb();
 }
 
 #[inline]
-pub fn invalidate_I_PoU() {
+pub fn invalidate_i_pou() {
     unsafe {
         asm!("ic iallu");
     }
     isb();
 }
 
-pub fn clean_invalidate_D_PoC() {
+pub fn clean_invalidate_d_poc() {
     let clid = read_clid();
-    let loc = LOC(clid);
+    let loc = loc(clid);
 
     for l in 0..loc {
-        if CTYPE(clid, l) > arm_cache_type::ARMCacheI as usize {
-            clean_invalidate_D_by_level(l);
+        if ctype(clid, l) > arm_cache_type::ARMCacheI as usize {
+            clean_invalidate_d_by_level(l);
         }
     }
 }
 
 #[inline]
-fn clean_invalidate_D_by_level(l: usize) {
+fn clean_invalidate_d_by_level(l: usize) {
     let lsize = read_cache_size(l, 0);
-    let lbits = LINEBITS(lsize);
-    let assoc = ASSOC(lsize);
+    let lbits = line_bits(lsize);
+    let assoc = assoc(lsize);
     let assoc_bits = 64 - (assoc - 1).leading_zeros() as usize;
-    let nsets = NSETS(lsize);
+    let nsets = nsets(lsize);
 
     for w in 0..assoc {
         for s in 0..nsets {
