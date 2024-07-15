@@ -1,3 +1,4 @@
+use aarch64_cpu::registers::VTCR_EL2::SH0::Non;
 use sel4_common::{
     fault::{lookup_fault_invalid_root, lookup_fault_t},
     sel4_config::{asidHighBits, asidLowBits},
@@ -17,31 +18,31 @@ pub const asid_map_asid_map_vspace: usize = 1;
 pub(crate) static mut armKSASIDTable: [usize; BIT!(asidHighBits)] = [0; BIT!(asidHighBits)];
 
 #[no_mangle]
-pub fn find_map_for_asid(asid: usize) -> asid_map_t {
+pub fn find_map_for_asid(asid: usize) -> Option<&'static asid_map_t> {
     let poolPtr = unsafe {
         convert_to_option_mut_type_ref::<asid_pool_t>(armKSASIDTable[asid >> asidLowBits])
     };
     if let Some(pool) = poolPtr {
-        return pool.asid_map_slice()[asid & MASK!(asidLowBits)];
+        return Some(&pool.asid_map_slice()[asid & MASK!(asidLowBits)]);
     }
-    asid_map_t::new_none()
+    None
 }
 
 #[no_mangle]
 pub fn find_vspace_for_asid(asid: usize) -> findVSpaceForASID_ret {
-    let asid_map = find_map_for_asid(asid);
     let mut ret: findVSpaceForASID_ret = findVSpaceForASID_ret {
-        status: exception_t::EXCEPTION_FAULT,
+        status: exception_t::EXCEPTION_LOOKUP_FAULT,
         vspace_root: None,
-        lookup_fault: None,
+        lookup_fault: Some(lookup_fault_t::new_root_invalid()),
     };
-    if asid_map.get_type() != asid_map_asid_map_vspace {
-        ret.lookup_fault = Some(lookup_fault_t::new_root_invalid());
-        ret.status = exception_t::EXCEPTION_LOOKUP_FAULT;
+
+    match find_map_for_asid(asid) {
+        Some(asid_map) => {
+            ret.vspace_root = Some(asid_map.get_vspace_root() as *mut PTE);
+            ret.status = exception_t::EXCEPTION_NONE;
+        }
+        None => {}
     }
-    //FIXME::this PTE should be pgde_t;
-    ret.vspace_root = Some(asid_map.get_vspace_root() as *mut PTE);
-    ret.status = exception_t::EXCEPTION_NONE;
     ret
 }
 

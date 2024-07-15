@@ -59,7 +59,7 @@ pub(crate) static mut armKSGlobalKernelPDs: PageAligned<PageAligned<PTE>> =
 
 #[no_mangle]
 #[link_section = ".page_table"]
-pub(crate) static mut armKSGlobalUserVSpace: PageAligned<PTE> = PageAligned::new(PTE(0));
+pub static mut armKSGlobalUserVSpace: PageAligned<PTE> = PageAligned::new(PTE(0));
 
 #[no_mangle]
 #[link_section = ".page_table"]
@@ -260,7 +260,7 @@ pub fn pageDirectoryMapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*mut
 
     let pude = unsafe { (*lu_ret.pudSlot).as_pude() };
     if pude.pd_ptr_get_present()
-        && pude.get_pd_base_address() == pptr_to_paddr(pd as *const PDE as usize)
+        && pude.pude_pd_ptr_get_pd_base_address() == pptr_to_paddr(pd as *const PDE as usize)
     {
         return Some(lu_ret.pudSlot);
     }
@@ -283,7 +283,7 @@ pub fn pageTableMapped(asid: asid_t, vaddr: vptr_t, pt: &pte_t) -> Option<*mut p
 
     let pde = unsafe { (*lu_ret.pdSlot).as_pde() };
     if pde.small_ptr_get_present()
-        && pde.small_ptr_get_pt_base_address() == pptr_to_paddr(pt as *const pte_t as usize)
+        && pde.pde_small_ptr_get_pt_base_address() == pptr_to_paddr(pt as *const pte_t as usize)
     {
         return Some(lu_ret.pdSlot);
     }

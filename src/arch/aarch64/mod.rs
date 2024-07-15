@@ -8,7 +8,7 @@ mod structures;
 mod utils;
 pub use asid::*;
 pub use boot::*;
-pub use interface::set_vm_root;
+pub use interface::*;
 pub use machine::{setCurrentUserVSpaceRoot, ttbr_new};
 pub use pagetable::create_it_pud_cap;
 pub use pte::PTEFlags;
