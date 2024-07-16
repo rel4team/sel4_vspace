@@ -144,19 +144,19 @@ pub fn makeUser3rdLevel(paddr: pptr_t, vm_rights: vm_rights_t, attributes: vm_at
 
 #[no_mangle]
 pub fn set_vm_root_for_flush_with_thread_root(
-    vspace: usize,
+    vspace: *mut PTE,
     asid: asid_t,
     thread_root: &cap_t,
 ) -> bool {
     if thread_root.get_cap_type() == CapTag::CapPageGlobalDirectoryCap
         && thread_root.get_pgd_is_mapped() != 0
-        && thread_root.get_pgd_base_ptr() == vspace
+        && thread_root.get_pgd_base_ptr() == vspace as usize
     {
         return false;
     }
 
     // armv_context_switch(vspace, asid);
-    setCurrentUserVSpaceRoot(ttbr_new(asid, vspace));
+    setCurrentUserVSpaceRoot(ttbr_new(asid, vspace as usize));
     true
 }
 
