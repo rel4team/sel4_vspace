@@ -1,10 +1,8 @@
-use core::mem;
-
 use sel4_common::{
     fault::lookup_fault_t,
     sel4_config::{asidHighBits, asidLowBits, IT_ASID},
     structures::exception_t,
-    utils::{convert_ref_type_to_usize, convert_to_mut_type_ref, convert_to_option_mut_type_ref},
+    utils::{convert_to_mut_type_ref, convert_to_option_mut_type_ref},
     BIT, MASK,
 };
 use sel4_cspace::arch::cap_t;
@@ -16,13 +14,29 @@ use super::machine::invalidate_local_tlb_asid;
 pub const asid_map_asid_map_none: usize = 0;
 pub const asid_map_asid_map_vspace: usize = 1;
 
-pub static mut armKSASIDTable: [usize; BIT!(asidHighBits)] = [0; BIT!(asidHighBits)];
+pub(crate) static mut armKSASIDTable: [usize; BIT!(asidHighBits)] = [0; BIT!(asidHighBits)];
+
+#[inline]
+fn get_asid_table() -> &'static mut [usize] {
+    unsafe { core::slice::from_raw_parts_mut(armKSASIDTable.as_mut_ptr(), BIT!(asidHighBits)) }
+}
+
+#[inline]
+fn get_asid_pool_by_index(idx: usize) -> usize {
+    unsafe { armKSASIDTable[idx] }
+}
+
+#[inline]
+pub fn set_asid_pool_by_index(idx: usize, val: usize) {
+    unsafe {
+        armKSASIDTable[idx] = val;
+    }
+}
 
 #[no_mangle]
 pub fn find_map_for_asid(asid: usize) -> Option<&'static asid_map_t> {
-    let poolPtr = unsafe {
-        convert_to_option_mut_type_ref::<asid_pool_t>(armKSASIDTable[asid >> asidLowBits])
-    };
+    let poolPtr =
+        convert_to_option_mut_type_ref::<asid_pool_t>(get_asid_pool_by_index(asid >> asidLowBits));
     if let Some(pool) = poolPtr {
         return Some(&pool.asid_map_slice()[asid & MASK!(asidLowBits)]);
     }
@@ -49,9 +63,7 @@ pub fn find_vspace_for_asid(asid: usize) -> findVSpaceForASID_ret {
 
 #[no_mangle]
 pub fn delete_asid(asid: usize, vspace: *mut PTE, cap: &cap_t) -> Result<(), lookup_fault_t> {
-    let ptr = unsafe {
-        convert_to_option_mut_type_ref::<asid_pool_t>(armKSASIDTable[asid >> asidLowBits])
-    };
+    let ptr = convert_to_option_mut_type_ref::<asid_pool_t>(get_asid_table()[asid >> asidLowBits]);
     if let Some(pool) = ptr {
         let asid_map: asid_map_t = pool.asid_map_slice()[asid & MASK!(asidLowBits)];
         if asid_map.get_type() == asid_map_asid_map_vspace
@@ -71,7 +83,7 @@ pub fn delete_asid_pool(
     pool: *mut asid_pool_t,
     default_vspace_cap: &cap_t,
 ) -> Result<(), lookup_fault_t> {
-    let pool_in_table = unsafe { armKSASIDTable[asid_base >> asidLowBits] };
+    let pool_in_table = get_asid_pool_by_index(asid_base >> asidLowBits);
     if pool as usize == pool_in_table {
         // clear all asid in target asid pool
         let pool = convert_to_mut_type_ref::<asid_pool_t>(pool_in_table);
@@ -81,19 +93,10 @@ pub fn delete_asid_pool(
                 invalidate_local_tlb_asid(asid_base + offset);
             }
         }
-        unsafe {
-            armKSASIDTable[asid_base >> asidLowBits] = 0;
-        }
+        set_asid_pool_by_index(asid_base >> asidLowBits, 0);
         return set_vm_root(default_vspace_cap);
     }
     Ok(())
-}
-
-pub fn set_asid_pool_by_index(index: usize, pool_ptr: usize) {
-    // assert!(index < BIT!(asidHighBits));
-    unsafe {
-        armKSASIDTable[index] = pool_ptr;
-    }
 }
 
 #[no_mangle]
@@ -102,7 +105,5 @@ pub fn write_it_asid_pool(it_ap_cap: &cap_t, it_vspace_cap: &cap_t) {
     let ap = &asid_pool_t::from(it_ap_cap.get_asid_pool());
     let asid_map = asid_map_t::new_vspace(it_vspace_cap.get_pgd_base_ptr());
     ap.set_asid_map(IT_ASID, asid_map);
-    unsafe {
-        armKSASIDTable[IT_ASID >> asidLowBits] = ap.0;
-    }
+    set_asid_pool_by_index(IT_ASID >> asidLowBits, ap.0);
 }

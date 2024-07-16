@@ -10,12 +10,11 @@ use sel4_common::{
 use sel4_cspace::arch::cap_t;
 
 use crate::{
-    arch::VAddr, asid_t, kpptr_to_paddr, pptr_t, pptr_to_paddr, vm_attributes_t, vptr_t, PTEFlags,
-    GET_KPT_INDEX, GET_PT_INDEX, PDE, PGDE, PTE, PUDE,
-};
-
-use super::interface::{
-    armKSGlobalKernelPDs, armKSGlobalKernelPGD, armKSGlobalKernelPT, armKSGlobalKernelPUD,
+    arch::VAddr, asid_t, get_kernel_page_directory_base_by_index, get_kernel_page_table_base,
+    get_kernel_page_upper_directory_base, kpptr_to_paddr, pptr_t, pptr_to_paddr,
+    set_kernel_page_directory_by_index, set_kernel_page_global_directory_by_index,
+    set_kernel_page_table_by_index, set_kernel_page_upper_directory_by_index, vm_attributes_t,
+    vptr_t, PTEFlags, GET_KPT_INDEX, GET_PT_INDEX, PDE, PGDE, PTE, PUDE,
 };
 
 use super::page_slice;
@@ -42,42 +41,50 @@ pub const RESERVED: usize = 3;
 #[no_mangle]
 #[link_section = ".boot.text"]
 pub fn rust_map_kernel_window() {
-    unsafe {
-        armKSGlobalKernelPGD[GET_KPT_INDEX(PPTR_BASE, 0)] =
-            PTE::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPUD.as_ptr() as usize), true);
-    }
-
+    set_kernel_page_global_directory_by_index(
+        GET_KPT_INDEX(PPTR_BASE, 0),
+        PTE::pte_next_table(kpptr_to_paddr(get_kernel_page_upper_directory_base()), true),
+    );
     let mut idx = GET_KPT_INDEX(PPTR_BASE, 1);
     while idx < GET_KPT_INDEX(PPTR_TOP, 1) {
-        unsafe {
-            armKSGlobalKernelPUD[idx] = PTE::pte_next_table(
-                kpptr_to_paddr(armKSGlobalKernelPDs[idx].as_ptr() as usize),
+        set_kernel_page_upper_directory_by_index(
+            idx,
+            PTE::pte_next_table(
+                kpptr_to_paddr(get_kernel_page_directory_base_by_index(idx)),
                 true,
-            );
-        }
+            ),
+        );
         idx += 1;
     }
 
     let mut vaddr = PPTR_BASE;
     let mut paddr = PADDR_BASE;
     while paddr < PADDR_TOP {
-        unsafe {
-            let flag = PTEFlags::UXN | PTEFlags::AF | PTEFlags::NORMAL;
-            armKSGlobalKernelPDs[GET_KPT_INDEX(vaddr, 1)][GET_KPT_INDEX(vaddr, 2)] =
-                PTE::new(paddr, flag);
-            vaddr += BIT!(seL4_LargePageBits);
-            paddr += BIT!(seL4_LargePageBits)
-        }
+        let flag = PTEFlags::UXN | PTEFlags::AF | PTEFlags::NORMAL;
+        set_kernel_page_directory_by_index(
+            GET_KPT_INDEX(vaddr, 1),
+            GET_KPT_INDEX(vaddr, 2),
+            PTE::new(paddr, flag),
+        );
+
+        vaddr += BIT!(seL4_LargePageBits);
+        paddr += BIT!(seL4_LargePageBits)
     }
 
-    unsafe {
-        armKSGlobalKernelPUD[GET_KPT_INDEX(PPTR_TOP, 1)] = PTE::pte_next_table(
-            kpptr_to_paddr(armKSGlobalKernelPDs[BIT!(PT_INDEX_BITS) - 1].as_ptr() as usize),
+    set_kernel_page_upper_directory_by_index(
+        GET_KPT_INDEX(PPTR_TOP, 1),
+        PTE::pte_next_table(
+            kpptr_to_paddr(get_kernel_page_directory_base_by_index(
+                BIT!(PT_INDEX_BITS) - 1,
+            )),
             true,
-        );
-        armKSGlobalKernelPDs[BIT!(PT_INDEX_BITS) - 1][BIT!(PT_INDEX_BITS) - 1] =
-            PTE::pte_next_table(kpptr_to_paddr(armKSGlobalKernelPT.as_ptr() as usize), true);
-    }
+        ),
+    );
+    set_kernel_page_directory_by_index(
+        BIT!(PT_INDEX_BITS) - 1,
+        BIT!(PT_INDEX_BITS) - 1,
+        PTE::pte_next_table(kpptr_to_paddr(get_kernel_page_table_base()), true),
+    );
 }
 
 #[no_mangle]
@@ -97,8 +104,9 @@ pub fn map_kernel_frame(
         attr_index = mair_types::DEVICE_nGnRnE as usize;
         shareable = 0;
     }
-    unsafe {
-        armKSGlobalKernelPT[GET_PT_INDEX(vaddr)] = PTE::pte_new(
+    set_kernel_page_table_by_index(
+        GET_PT_INDEX(vaddr),
+        PTE::pte_new(
             uxn,
             paddr,
             0,
@@ -107,8 +115,8 @@ pub fn map_kernel_frame(
             PTE::ap_from_vm_rights_t(vm_rights).bits() >> 6,
             attr_index,
             RESERVED,
-        )
-    }
+        ),
+    );
 }
 
 #[no_mangle]
