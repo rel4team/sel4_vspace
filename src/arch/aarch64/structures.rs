@@ -73,30 +73,36 @@ pub struct lookupFrame_ret_t {
 // pub struct asid_pool_t {
 //     pub array: [asid_map_t; BIT!(asidLowBits)],
 // }
-pub struct asid_pool_t(usize);
+pub struct asid_pool_t(pub usize);
 
 /// Get the slice of the page_table items
 ///
 /// Addr should be virtual address.
 pub(super) fn asid_pool_slice<T>(addr: usize) -> &'static mut [T] {
-    // ASID Pool's len is asidLowBits
+    // ASID Pool's len is BIT!(asidLowBits)
     convert_to_mut_slice::<T>(addr, BIT!(asidLowBits))
+}
+
+impl From<usize> for asid_pool_t {
+    fn from(value: usize) -> Self {
+        asid_pool_t(value)
+    }
 }
 
 impl_multi!(asid_pool_t {
     #[inline]
     pub fn asid_map_slice<T>(&self) -> &'static mut [T] {
-        asid_pool_slice(self.0)
+        asid_pool_slice::<T>(self.0 as usize)
     }
 
     #[inline]
     pub fn get_asid_map(&self, idx: usize) -> asid_map_t {
-        self.asid_map_slice()[idx]
+        self.asid_map_slice::<asid_map_t>()[idx]
     }
 
     #[inline]
     pub fn set_asid_map(&self, idx: usize, val: asid_map_t) {
-        self.asid_map_slice()[idx] = val;
+        self.asid_map_slice::<usize>()[idx] = val.get_vspace_root();
     }
 });
 

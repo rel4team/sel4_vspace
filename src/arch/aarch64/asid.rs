@@ -1,3 +1,5 @@
+use core::mem;
+
 use sel4_common::{
     fault::lookup_fault_t,
     sel4_config::{asidHighBits, asidLowBits, IT_ASID},
@@ -14,7 +16,7 @@ use super::machine::invalidate_local_tlb_asid;
 pub const asid_map_asid_map_none: usize = 0;
 pub const asid_map_asid_map_vspace: usize = 1;
 
-pub(crate) static mut armKSASIDTable: [usize; BIT!(asidHighBits)] = [0; BIT!(asidHighBits)];
+pub static mut armKSASIDTable: [usize; BIT!(asidHighBits)] = [0; BIT!(asidHighBits)];
 
 #[no_mangle]
 pub fn find_map_for_asid(asid: usize) -> Option<&'static asid_map_t> {
@@ -95,11 +97,12 @@ pub fn set_asid_pool_by_index(index: usize, pool_ptr: usize) {
 }
 
 #[no_mangle]
+#[inline]
 pub fn write_it_asid_pool(it_ap_cap: &cap_t, it_vspace_cap: &cap_t) {
-    let ap = convert_to_mut_type_ref::<asid_pool_t>(it_ap_cap.get_asid_pool());
+    let ap = &asid_pool_t::from(it_ap_cap.get_asid_pool());
     let asid_map = asid_map_t::new_vspace(it_vspace_cap.get_pgd_base_ptr());
     ap.set_asid_map(IT_ASID, asid_map);
     unsafe {
-        armKSASIDTable[IT_ASID >> asidLowBits] = convert_ref_type_to_usize(ap);
+        armKSASIDTable[IT_ASID >> asidLowBits] = ap.0;
     }
 }
