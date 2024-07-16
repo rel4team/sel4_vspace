@@ -46,10 +46,33 @@ impl<T> DerefMut for PageAligned<T> {
 #[link_section = ".page_table"]
 pub(crate) static mut armKSGlobalKernelPGD: PageAligned<PTE> = PageAligned::new(PTE(0));
 
+#[inline]
+pub fn get_kernel_page_global_directory_base() -> usize {
+    unsafe { armKSGlobalKernelPGD.as_ptr() as usize }
+}
+
+#[inline]
+pub fn set_kernel_page_global_directory_by_index(idx: usize, pte: PTE) {
+    unsafe {
+        armKSGlobalKernelPGD[idx] = pte;
+    }
+}
+
 #[no_mangle]
 #[link_section = ".page_table"]
 pub(crate) static mut armKSGlobalKernelPUD: PageAligned<PTE> = PageAligned::new(PTE(0));
 
+#[inline]
+pub fn get_kernel_page_upper_directory_base() -> usize {
+    unsafe { armKSGlobalKernelPUD.as_ptr() as usize }
+}
+
+#[inline]
+pub fn set_kernel_page_upper_directory_by_index(idx: usize, pte: PTE) {
+    unsafe {
+        armKSGlobalKernelPUD[idx] = pte;
+    }
+}
 // #[no_mangle]
 // #[link_section = ".page_table"]
 // pub(crate) static mut armKSGlobalKernelPDs: [[PTE; BIT!(PT_INDEX_BITS)]; BIT!(PT_INDEX_BITS)] =
@@ -59,14 +82,42 @@ pub(crate) static mut armKSGlobalKernelPUD: PageAligned<PTE> = PageAligned::new(
 pub(crate) static mut armKSGlobalKernelPDs: PageAligned<PageAligned<PTE>> =
     PageAligned::new(PageAligned::new(PTE(0)));
 
+#[inline]
+pub fn get_kernel_page_directory_base_by_index(idx: usize) -> usize {
+    unsafe { armKSGlobalKernelPDs[idx].as_ptr() as usize }
+}
+
+#[inline]
+pub fn set_kernel_page_directory_by_index(idx1: usize, idx2: usize, pte: PTE) {
+    unsafe {
+        armKSGlobalKernelPDs[idx1][idx2] = pte;
+    }
+}
+
 #[no_mangle]
 #[link_section = ".page_table"]
-pub static mut armKSGlobalUserVSpace: PageAligned<PTE> = PageAligned::new(PTE(0));
+pub(crate) static mut armKSGlobalUserVSpace: PageAligned<PTE> = PageAligned::new(PTE(0));
+
+#[inline]
+pub fn get_arm_global_user_vspace_base() -> usize {
+    unsafe { armKSGlobalUserVSpace.as_ptr() as usize }
+}
 
 #[no_mangle]
 #[link_section = ".page_table"]
 pub(crate) static mut armKSGlobalKernelPT: PageAligned<PTE> = PageAligned::new(PTE(0));
 
+#[inline]
+pub fn get_kernel_page_table_base() -> usize {
+    unsafe { armKSGlobalKernelPT.as_ptr() as usize }
+}
+
+#[inline]
+pub fn set_kernel_page_table_by_index(idx: usize, pte: PTE) {
+    unsafe {
+        armKSGlobalKernelPT[idx] = pte;
+    }
+}
 /// 根据给定的`vspace_root`设置相应的页表，会检查`vspace_root`是否合法，如果不合法默认设置为内核页表
 ///
 /// Use page table in vspace_root to set the satp register.
@@ -82,19 +133,14 @@ pub fn activate_kernel_window() {
 #[no_mangle]
 #[link_section = ".boot.text"]
 pub fn activate_kernel_vspace() {
-    unsafe {
-        clean_invalidate_l1_caches();
-        setCurrentKernelVSpaceRoot(ttbr_new(
-            0,
-            armKSGlobalKernelPGD.as_ptr() as usize - PPTR_BASE,
-        ));
-        setCurrentUserVSpaceRoot(ttbr_new(
-            0,
-            armKSGlobalUserVSpace.as_ptr() as usize - PPTR_BASE,
-        ));
-        invalidate_local_tlb();
-        /* A53 hardware does not support TLB locking */
-    }
+    clean_invalidate_l1_caches();
+    setCurrentKernelVSpaceRoot(ttbr_new(
+        0,
+        get_kernel_page_global_directory_base() - PPTR_BASE,
+    ));
+    setCurrentUserVSpaceRoot(ttbr_new(0, get_arm_global_user_vspace_base() - PPTR_BASE));
+    invalidate_local_tlb();
+    /* A53 hardware does not support TLB locking */
 }
 
 pub fn make_user_1st_level(
