@@ -454,6 +454,13 @@ impl_multi!(PDE {
     }
 
     #[inline]
+    pub const fn new_small(
+        pt_base_address: usize
+    ) -> Self {
+        Self((pt_base_address & 0xfffffffff000)|(pde_tag_t::pde_small as usize & 0x3))
+    }
+
+    #[inline]
     pub const fn get_pde_type(&self) -> usize {
         self.0 & 0x3
     }
