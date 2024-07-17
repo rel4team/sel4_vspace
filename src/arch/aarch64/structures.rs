@@ -77,14 +77,6 @@ pub struct asid_pool_t {
     pub array: [asid_map_t; BIT!(asidLowBits)],
 }
 
-/// Get the slice of the page_table items
-///
-/// Addr should be virtual address.
-pub(super) fn asid_pool_slice<T>(addr: usize) -> &'static mut [T] {
-    // ASID Pool's len is BIT!(asidLowBits)
-    convert_to_mut_slice::<T>(addr, BIT!(asidLowBits))
-}
-
 impl asid_pool_t {
     pub fn new() -> Self {
         Self {
@@ -102,11 +94,13 @@ impl From<usize> for asid_map_t {
 impl_multi!(asid_pool_t {
     #[inline]
     pub fn get_asid_map(&self, idx: usize) -> & asid_map_t {
+        log::debug!("in get_asid_map");
         &self.array[idx]
     }
 
     #[inline]
     pub fn set_asid_map(&mut self, idx: usize, val: &asid_map_t) {
+        log::debug!("in set_asid_map");
         self.array[idx] = val.clone();
     }
 });
@@ -139,7 +133,7 @@ plus_define_bitfield! {
     asid_map_t, 1, 0, 0, 1 => {
         new_none, 0 => {},
         new_vspace, 0 => {
-            vspace_root , get_vspace_root , set_vspace_root , 0, 0, 48, 0 ,true
+            vspace_root , get_vspace_root , set_vspace_root , 0, 0, 36, 12 ,true
         }
     }
 }

@@ -24,11 +24,13 @@ fn get_asid_table() -> &'static mut [Option<asid_pool_t>] {
 
 #[inline]
 fn get_asid_pool_by_index(idx: usize) -> Option<&'static mut asid_pool_t> {
+    log::debug!("in get_asid_pool_by_index");
     unsafe { armKSASIDTable.get_mut(idx).and_then(|pool| pool.as_mut()) }
 }
 
 #[inline]
 pub fn set_asid_pool_by_index(idx: usize, val: Option<asid_pool_t>) {
+    log::debug!("set_asid_pool_by_index");
     unsafe {
         armKSASIDTable[idx] = val;
     }
@@ -36,6 +38,7 @@ pub fn set_asid_pool_by_index(idx: usize, val: Option<asid_pool_t>) {
 
 #[no_mangle]
 pub fn find_map_for_asid(asid: usize) -> Option<&'static asid_map_t> {
+    log::debug!("in find_map_for_asid");
     let poolPtr = get_asid_pool_by_index(asid >> asidLowBits);
     if let Some(pool) = poolPtr {
         return Some(&pool.get_asid_map(asid & MASK!(asidLowBits)));
@@ -45,6 +48,7 @@ pub fn find_map_for_asid(asid: usize) -> Option<&'static asid_map_t> {
 
 #[no_mangle]
 pub fn find_vspace_for_asid(asid: usize) -> findVSpaceForASID_ret {
+    log::debug!("in find_vspace_for_asid asid:{}", asid);
     let mut ret: findVSpaceForASID_ret = findVSpaceForASID_ret {
         status: exception_t::EXCEPTION_LOOKUP_FAULT,
         vspace_root: None,
@@ -56,14 +60,17 @@ pub fn find_vspace_for_asid(asid: usize) -> findVSpaceForASID_ret {
             ret.vspace_root = Some(asid_map.get_vspace_root() as *mut PGDE);
             ret.status = exception_t::EXCEPTION_NONE;
             ret.lookup_fault = None;
+            log::debug!("in find_vspace_for_asid , find vspace_root:{:#x}",asid_map.get_vspace_root());
         }
         None => {}
     }
+    
     ret
 }
 
 #[no_mangle]
 pub fn delete_asid(asid: usize, vspace: *mut PTE, cap: &cap_t) -> Result<(), lookup_fault_t> {
+    log::debug!("in delete_asid");
     let ptr = get_asid_pool_by_index(asid >> asidLowBits);
     if let Some(pool) = ptr {
         let asid_map = pool.get_asid_map(asid & MASK!(asidLowBits));
@@ -84,6 +91,7 @@ pub fn delete_asid_pool(
     pool: &mut asid_pool_t,
     default_vspace_cap: &cap_t,
 ) -> Result<(), lookup_fault_t> {
+    log::debug!("in delete_asid_pool");
     let pool_in_table = get_asid_pool_by_index(asid_base >> asidLowBits).unwrap_or_else(|| {
         panic!("Invalid asid pool found");
     });
@@ -105,10 +113,11 @@ pub fn delete_asid_pool(
 #[no_mangle]
 #[inline]
 pub fn write_it_asid_pool(it_ap_cap: &cap_t, it_vspace_cap: &cap_t) {
+    log::debug!("in write_it_asid_pool");
     let ap = convert_to_mut_type_ref::<asid_pool_t>(it_ap_cap.get_asid_pool());
     let asid_map = asid_map_t::new_vspace(it_vspace_cap.get_pgd_base_ptr());
     log::info!(
-        "debug:{:#x} asid_map{:#x}",
+        "debug:{:#x} asid_map:{:#x}",
         it_vspace_cap.get_pgd_base_ptr(),
         asid_map.get_vspace_root()
     );
