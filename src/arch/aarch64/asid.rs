@@ -7,7 +7,7 @@ use sel4_common::{
 };
 use sel4_cspace::arch::cap_t;
 
-use crate::{asid_map_t, asid_pool_t, asid_t, findVSpaceForASID_ret, set_vm_root, PTE};
+use crate::{asid_map_t, asid_pool_t, asid_t, findVSpaceForASID_ret, set_vm_root, PGDE, PTE};
 
 use super::machine::invalidate_local_tlb_asid;
 
@@ -53,7 +53,7 @@ pub fn find_vspace_for_asid(asid: usize) -> findVSpaceForASID_ret {
 
     match find_map_for_asid(asid) {
         Some(asid_map) => {
-            ret.vspace_root = Some(asid_map.get_vspace_root() as *mut PTE);
+            ret.vspace_root = Some(asid_map.get_vspace_root() as *mut PGDE);
             ret.status = exception_t::EXCEPTION_NONE;
         }
         None => {}

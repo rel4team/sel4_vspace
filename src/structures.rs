@@ -6,6 +6,8 @@ use core::{
 use sel4_common::{arch::config::PPTR_BASE, fault::lookup_fault_t, structures::exception_t};
 
 use crate::PTE;
+#[cfg(target_arch="aarch64")]
+use crate::PGDE;
 
 /// 在`PSpace`段的虚拟地址空间中的指针
 ///
@@ -19,11 +21,20 @@ pub type vptr_t = usize;
 /// 进程对应的asid所属的类型
 pub type asid_t = usize;
 
+#[cfg(target_arch ="riscv64")]
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct findVSpaceForASID_ret {
     pub status: exception_t,
     pub vspace_root: Option<*mut PTE>,
+    pub lookup_fault: Option<lookup_fault_t>,
+}
+#[cfg(target_arch="aarch64")]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct findVSpaceForASID_ret {
+    pub status: exception_t,
+    pub vspace_root: Option<*mut PGDE>,
     pub lookup_fault: Option<lookup_fault_t>,
 }
 

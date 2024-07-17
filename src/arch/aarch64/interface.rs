@@ -210,7 +210,7 @@ pub fn page_upper_directory_mapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> O
     match find_map_for_asid(asid) {
         Some(asid_map) => {
             let lookup_ret =
-                convert_to_type_ref::<PTE>(asid_map.get_vspace_root()).lookup_pgd_slot(vaddr);
+                convert_to_type_ref::<PGDE>(asid_map.get_vspace_root()).lookup_pgd_slot(vaddr);
             if lookup_ret.status != exception_t::EXCEPTION_NONE {
                 return None;
             }
@@ -233,7 +233,7 @@ pub fn page_directory_mapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*m
     match find_map_for_asid(asid) {
         Some(asid_map) => {
             let lookup_ret =
-                convert_to_type_ref::<PTE>(asid_map.get_vspace_root()).lookup_pud_slot(vaddr);
+                convert_to_type_ref::<PGDE>(asid_map.get_vspace_root()).lookup_pud_slot(vaddr);
             if lookup_ret.status != exception_t::EXCEPTION_NONE {
                 return None;
             }
@@ -256,7 +256,7 @@ pub fn page_table_mapped(asid: asid_t, vaddr: vptr_t, pt: &PTE) -> Option<*mut P
     match find_map_for_asid(asid) {
         Some(asid_map) => {
             let lookup_ret =
-                convert_to_type_ref::<PTE>(asid_map.get_vspace_root()).lookup_pd_slot(vaddr);
+                convert_to_type_ref::<PGDE>(asid_map.get_vspace_root()).lookup_pd_slot(vaddr);
             if lookup_ret.status != exception_t::EXCEPTION_NONE {
                 return None;
             }
