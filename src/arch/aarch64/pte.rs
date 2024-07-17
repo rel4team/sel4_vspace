@@ -1,29 +1,14 @@
-use core::intrinsics::unlikely;
-
 use crate::{
-    arch::aarch64::{
-        machine::{clean_by_va_pou, invalidate_local_tlb_asid},
-        structures::{
-            lookupPDSlot_ret_t, lookupPGDSlot_ret_t, lookupPTSlot_ret_t, lookupPUDSlot_ret_t,
-        },
-        utils::{GET_PD_INDEX, GET_PGD_INDEX, GET_PT_INDEX, GET_UPUD_INDEX},
-    },
-    asid_t, find_vspace_for_asid, lookupFrame_ret_t, pptr_to_paddr, vm_attributes_t, vptr_t, PDE,
-    PGDE, PTE, PUDE,
+    arch::aarch64::machine::clean_by_va_pou, asid_t, vm_attributes_t, vptr_t, PDE, PGDE, PTE, PUDE,
 };
 use sel4_common::{
     arch::vm_rights_t,
-    fault::lookup_fault_t,
-    sel4_config::{
-        seL4_PageBits, seL4_PageTableBits, ARM_Huge_Page, ARM_Large_Page, ARM_Small_Page,
-        PT_INDEX_BITS,
-    },
-    structures::exception_t,
-    utils::{convert_ref_type_to_usize, convert_to_mut_type_ref, convert_to_type_ref},
+    sel4_config::seL4_PageTableBits,
+    utils::{convert_ref_type_to_usize, convert_to_mut_type_ref},
     BIT,
 };
 
-use super::utils::{paddr_to_pptr, GET_UPT_INDEX};
+use super::utils::paddr_to_pptr;
 
 pub enum vm_page_size {
     ARMSmallPage,
@@ -37,7 +22,6 @@ enum pte_tag_t {
     pte_4k_page = 7,
     pte_invalid = 0,
 }
-
 
 pub const UPT_LEVELS: usize = 4;
 bitflags::bitflags! {
@@ -207,8 +191,6 @@ impl PTE {
         //     pptr_to_paddr(convert_ref_type_to_usize(ptSlot)),
         // )
     }
-
-    
 
     pub fn pte_new(
         UXN: usize,

@@ -1,16 +1,20 @@
 use super::machine::mair_types;
+use super::structures::{
+    lookupFrame_ret_t, lookupPDSlot_ret_t, lookupPGDSlot_ret_t, lookupPTSlot_ret_t,
+    lookupPUDSlot_ret_t,
+};
 use crate::arch::VAddr;
+use crate::vptr_t;
 use sel4_common::{
     arch::{
         config::{KERNEL_ELF_BASE_OFFSET, PPTR_BASE_OFFSET},
         vm_rights_t,
     },
     sel4_config::*,
-    utils::{convert_to_mut_slice,convert_to_type_ref},structures::exception_t,
+    structures::exception_t,
+    utils::{convert_to_mut_slice, convert_to_type_ref},
     MASK,
 };
-use crate::vptr_t;
-use super::structures::{lookupPTSlot_ret_t,lookupPDSlot_ret_t,lookupPUDSlot_ret_t,lookupPGDSlot_ret_t,lookupFrame_ret_t};
 
 pub const KPT_LEVELS: usize = 4;
 pub const seL4_VSpaceIndexBits: usize = 9;
@@ -333,7 +337,7 @@ impl_multi!(PGDE {
         };
         ret
     }
-	pub fn lookup_frame(&self, vptr: vptr_t) -> lookupFrame_ret_t {
+    pub fn lookup_frame(&self, vptr: vptr_t) -> lookupFrame_ret_t {
         let mut ret = lookupFrame_ret_t {
             valid: false,
             frameBase: 0,
