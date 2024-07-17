@@ -73,7 +73,9 @@ pub struct lookupFrame_ret_t {
 // pub struct asid_pool_t {
 //     pub array: [asid_map_t; BIT!(asidLowBits)],
 // }
-pub struct asid_pool_t(pub usize);
+pub struct asid_pool_t {
+    pub array: [asid_map_t; BIT!(asidLowBits)],
+}
 
 /// Get the slice of the page_table items
 ///
@@ -83,33 +85,36 @@ pub(super) fn asid_pool_slice<T>(addr: usize) -> &'static mut [T] {
     convert_to_mut_slice::<T>(addr, BIT!(asidLowBits))
 }
 
-impl From<usize> for asid_pool_t {
-    fn from(value: usize) -> Self {
-        asid_pool_t(value)
+impl asid_pool_t {
+    pub fn new() -> Self {
+        Self {
+            array: [asid_map_t::from(0); BIT!(asidLowBits)],
+        }
+    }
+}
+
+impl From<usize> for asid_map_t {
+    fn from(val: usize) -> Self {
+        Self { words: [val; 1] }
     }
 }
 
 impl_multi!(asid_pool_t {
     #[inline]
-    pub fn asid_map_slice<T>(&self) -> &'static mut [T] {
-        asid_pool_slice::<T>(self.0 as usize)
+    pub fn get_asid_map(&self, idx: usize) -> & asid_map_t {
+        &self.array[idx]
     }
 
     #[inline]
-    pub fn get_asid_map(&self, idx: usize) -> asid_map_t {
-        self.asid_map_slice::<asid_map_t>()[idx]
-    }
-
-    #[inline]
-    pub fn set_asid_map(&self, idx: usize, val: asid_map_t) {
-        self.asid_map_slice::<usize>()[idx] = val.get_vspace_root();
+    pub fn set_asid_map(&mut self, idx: usize, val: &asid_map_t) {
+        self.array[idx] = val.clone();
     }
 });
 
 plus_define_bitfield! {
     pgde_t, 1, 0, 0, 0 => {
         new_pud, 0 => {
-            pud_base_address, get_pud_base_address, set_pud_base_address, 0, 12, 36, 0, false
+            pud_base_address, get_pud_base_address, set_pud_base_address, 0, 0, 48, 0, false
         }
     }
 }
@@ -117,7 +122,7 @@ plus_define_bitfield! {
 plus_define_bitfield! {
     pude_t, 1, 0, 0, 0 => {
         new_pd, 0 => {
-            pud_base_address, get_pud_base_address, set_pud_base_address, 0, 12, 36, 0, false
+            pd_base_address, get_pd_base_address, set_pd_base_address, 0, 0, 48, 0, false
         }
     }
 }
@@ -125,7 +130,7 @@ plus_define_bitfield! {
 plus_define_bitfield! {
     pde_t, 1, 0, 0, 0 => {
         new_small, 0 => {
-            pud_base_address, get_pud_base_address, set_pud_base_address, 0, 12, 36, 0, false
+            pud_base_address, get_pt_base_address, set_pt_base_address, 0, 0, 48, 0, false
         }
     }
 }
@@ -134,7 +139,7 @@ plus_define_bitfield! {
     asid_map_t, 1, 0, 0, 1 => {
         new_none, 0 => {},
         new_vspace, 0 => {
-            vspace_root , get_vspace_root , set_vspace_root , 0, 12, 36, 0 ,true
+            vspace_root , get_vspace_root , set_vspace_root , 0, 0, 48, 0 ,true
         }
     }
 }
