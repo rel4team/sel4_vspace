@@ -9,6 +9,7 @@ pub fn setCurrentKernelVSpaceRoot(val: usize) {
 
 #[inline]
 pub fn setCurrentUserVSpaceRoot(val: usize) {
+    log::debug!("set user vspace root: {:#x?}", val);
     TTBR0_EL1.set(val as _);
     // FIXME: use aisd instead of flush tlb
     unsafe { core::arch::asm!("tlbi vmalle1; dsb sy; isb") };
@@ -76,9 +77,10 @@ pub fn clean_by_va_pou(vaddr: usize, _paddr: usize) {
 
 #[inline(always)]
 pub fn dmb() {
-    unsafe {
-        asm!("dmb", options(nostack, preserves_flags));
-    }
+    log::warn!("dmb is not implemented");
+    // unsafe {
+    //     asm!("dmb", options(nostack, preserves_flags));
+    // }
 }
 
 // TIPS: please use const to make code cleaner and faster.

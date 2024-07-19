@@ -1,11 +1,9 @@
-use crate::{paddr_t, PageTable, PTE};
+use crate::{asid_t, find_vspace_for_asid, paddr_t, pptr_t, pptr_to_paddr, sfence, vptr_t, PageTable, PTE};
 use sel4_common::{
     arch::config::{
         KERNEL_ELF_BASE, KERNEL_ELF_PADDR_BASE, PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_BASE_OFFSET,
         PPTR_TOP,
-    },
-    sel4_config::PT_INDEX_BITS,
-    BIT, ROUND_DOWN,
+    }, fault::lookup_fault_t, sel4_config::{seL4_PageBits, PT_INDEX_BITS}, structures::exception_t, utils::pageBitsForSize, BIT, ROUND_DOWN
 };
 
 use super::{
@@ -148,4 +146,75 @@ pub fn copyGlobalMappings(Lvl1pt: usize) {
             i += 1;
         }
     }
+}
+
+/// 清除页表中对应的页表项。
+///
+/// `page_size`:在页表中寻找`vptr`对应的`pte`剩余的位数
+///
+/// `vptr`:该页表项对应的应用程序访问的虚拟地址（mapped_address）
+///
+/// `pptr`:分配的页面对应的虚拟地址(frame_base_ptr)
+#[no_mangle]
+pub fn unmapPage(
+    page_size: usize,
+    asid: asid_t,
+    vptr: vptr_t,
+    pptr: pptr_t,
+) -> Result<(), lookup_fault_t> {
+    /*
+        let find_ret = find_vspace_for_asid(asid);
+        if find_ret.status != exception_t::EXCEPTION_NONE {
+            return Err(find_ret.lookup_fault.unwrap());
+        }
+
+        let lu_ret = unsafe { (*find_ret.vspace_root.unwrap()).lookup_pt_slot(vptr) };
+
+        #[cfg(target_arch = "riscv64")]
+        if lu_ret.ptBitsLeft != pageBitsForSize(page_size) {
+            return Ok(());
+        }
+
+        let slot = unsafe { &(*lu_ret.ptSlot) };
+
+        if slot.get_valid() == 0
+            || slot.is_pte_table()
+            || slot.get_ppn() << seL4_PageBits != pptr_to_paddr(pptr)
+        {
+            return Ok(());
+        }
+
+        unsafe {
+            let slot = lu_ret.ptSlot as *mut usize;
+            *slot = 0;
+            #[cfg(target_arch = "riscv64")]
+            sfence();
+        }
+        Ok(())
+    */
+    let find_ret = find_vspace_for_asid(asid);
+    if find_ret.status != exception_t::EXCEPTION_NONE {
+        return Err(find_ret.lookup_fault.unwrap());
+    }
+    // TODO: Unify lookup_pt_slot
+    let lu_ret = unsafe { (*find_ret.vspace_root.unwrap()).lookup_pt_slot(vptr) };
+    if lu_ret.ptBitsLeft != pageBitsForSize(page_size) {
+        return Ok(());
+    }
+
+    let slot = unsafe { &(*lu_ret.ptSlot) };
+
+    if slot.get_valid() == 0
+        || slot.is_pte_table()
+        || slot.get_ppn() << seL4_PageBits != pptr_to_paddr(pptr)
+    {
+        return Ok(());
+    }
+
+    unsafe {
+        let slot = lu_ret.ptSlot as *mut usize;
+        *slot = 0;
+        sfence();
+    }
+    Ok(())
 }

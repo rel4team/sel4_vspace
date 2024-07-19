@@ -9,7 +9,7 @@ mod utils;
 pub use asid::*;
 pub use boot::*;
 pub use interface::set_vm_root;
-pub use pagetable::{activate_kernel_vspace, copyGlobalMappings, rust_map_kernel_window};
+pub use pagetable::{activate_kernel_vspace, copyGlobalMappings, rust_map_kernel_window, unmapPage};
 pub use pte::PTEFlags;
 pub use satp::{setVSpaceRoot, sfence};
 pub use structures::*;

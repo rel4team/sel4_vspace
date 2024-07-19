@@ -5,6 +5,8 @@ use sel4_common::{
         config::{KERNEL_ELF_BASE_OFFSET, PPTR_BASE_OFFSET},
         vm_rights_t,
     },
+    fault::lookup_fault_t,
+    ffi_addr,
     sel4_config::*,
     utils::convert_to_mut_slice,
     MASK,
@@ -208,7 +210,7 @@ impl_multi!(PGDE, PUDE, PDE, PTE {
     }
 });
 
-impl_multi!(PGDE {
+impl PGDE {
     #[inline]
     pub const fn get_pgde_type(&self) -> usize {
         self.0 & 0x3
@@ -223,9 +225,9 @@ impl_multi!(PGDE {
     pub const fn get_pud_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
     }
-});
+}
 
-impl_multi!(PUDE {
+impl PUDE {
     #[inline]
     pub const fn new_1g(
         uxn: bool,
@@ -234,23 +236,29 @@ impl_multi!(PUDE {
         af: usize,
         sh: usize,
         ap: usize,
-        attr_index: mair_types
+        attr_index: mair_types,
     ) -> Self {
         Self(
             (uxn as usize & 0x1) << 54
-            | (page_base_address & 0xffffc0000000)
-            | (ng & 0x1) << 11
-            | (af & 0x1) << 10
-            | (sh & 0x1) << 8
-            | (ap & 0x1) << 6
-            | (attr_index as usize & 0x7) << 2
-            | 0x1, // pude_1g_tag
+                | (page_base_address & 0xffffc0000000)
+                | (ng & 0x1) << 11
+                | (af & 0x1) << 10
+                | (sh & 0x1) << 8
+                | (ap & 0x1) << 6
+                | (attr_index as usize & 0x7) << 2
+                | 0x1, // pude_1g_tag
         )
     }
 
     #[inline]
     pub const fn get_pude_type(&self) -> usize {
         self.0 & 0x3
+    }
+
+    // Check whether the pude is a 1g huge page.
+    #[inline]
+    pub const fn is_1g_page(&self) -> bool {
+        self.0 & 0x3 == 1
     }
 
     #[inline]
@@ -266,9 +274,9 @@ impl_multi!(PUDE {
     pub fn get_pd_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
     }
-});
+}
 
-impl_multi!(PDE {
+impl PDE {
     #[inline]
     pub const fn new_large(
         uxn: bool,
@@ -277,17 +285,17 @@ impl_multi!(PDE {
         af: usize,
         sh: usize,
         ap: usize,
-        attr_index: mair_types
+        attr_index: mair_types,
     ) -> Self {
         Self(
             (uxn as usize & 0x1) << 54
-            | (page_base_address & 0xffffffe00000)
-            | (ng & 0x1) << 11
-            | (af & 0x1) << 10
-            | (sh & 0x1) << 8
-            | (ap & 0x1) << 6
-            | (attr_index as usize & 0x7) << 2
-            | 0x1,  // pde_large_tag
+                | (page_base_address & 0xffffffe00000)
+                | (ng & 0x1) << 11
+                | (af & 0x1) << 10
+                | (sh & 0x1) << 8
+                | (ap & 0x1) << 6
+                | (attr_index as usize & 0x7) << 2
+                | 0x1, // pde_large_tag
         )
     }
 
@@ -301,23 +309,31 @@ impl_multi!(PDE {
         self.get_pde_type() == 3 // pde_pde_small
     }
 
+    /// Check whether it is a 2M huge page.
+    #[inline]
+    pub const fn is_larger_page(&self) -> bool {
+        self.get_pde_type() == 3
+    }
+
     #[inline]
     pub const fn pde_large_ptr_get_page_base_address(&self) -> usize {
         self.0 & 0xffffffe00000
     }
 
+    // TODO: Rename get_pt_base_address to get_base_address
     #[inline]
     pub const fn get_pt_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
     }
-});
+}
 
-impl_multi!(PTE{
+impl PTE {
     #[inline]
     pub const fn get_reserved(&self) -> usize {
         self.0 & 0x3
     }
 
+    // TODO: Rename to is_present()
     #[inline]
     pub const fn pte_ptr_get_present(&self) -> bool {
         self.get_reserved() == 0x3
@@ -327,4 +343,13 @@ impl_multi!(PTE{
     pub const fn pte_ptr_get_page_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
     }
-});
+}
+
+/// Get current lookup fault object.
+pub(super) fn get_current_lookup_fault() -> &'static mut lookup_fault_t {
+    unsafe {
+        (ffi_addr!(current_lookup_fault) as *mut lookup_fault_t)
+            .as_mut()
+            .unwrap()
+    }
+}

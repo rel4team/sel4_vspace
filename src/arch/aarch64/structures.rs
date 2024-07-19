@@ -1,7 +1,12 @@
-use crate::{impl_multi, vm_attributes_t, PDE, PGDE, PTE, PUDE};
+use core::ops::{Deref, DerefMut};
+
+use crate::{vm_attributes_t, PDE, PGDE, PTE, PUDE};
 use sel4_common::{
-    plus_define_bitfield, sel4_config::asidLowBits, structures::exception_t,
-    utils::convert_to_mut_slice, BIT,
+    plus_define_bitfield,
+    sel4_config::asidLowBits,
+    structures::exception_t,
+    utils::convert_to_mut_type_ref,
+    BIT,
 };
 
 use super::machine::mair_types;
@@ -69,42 +74,38 @@ pub struct lookupFrame_ret_t {
 
 /// 用于存放`asid`对应的根页表基址，是一个`usize`的数组，其中`asid`按低`asidLowBits`位进行索引
 #[repr(C)]
-#[derive(Copy, Clone)]
-// pub struct asid_pool_t {
-//     pub array: [asid_map_t; BIT!(asidLowBits)],
-// }
-pub struct asid_pool_t(pub usize);
+#[derive(Copy, Clone, Debug)]
+pub struct asid_pool_t([asid_map_t; BIT!(asidLowBits)]);
+
+/// Dereference for asid_pool_t.
+///
+/// Allow directly accessing values
+impl DerefMut for asid_pool_t {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/// Dereference for asid_pool_t.
+///
+/// Allow directly accessing values
+impl Deref for asid_pool_t {
+    type Target = [asid_map_t; BIT!(asidLowBits)];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Get the slice of the page_table items
 ///
 /// Addr should be virtual address.
-pub(super) fn asid_pool_slice<T>(addr: usize) -> &'static mut [T] {
+pub(super) fn asid_pool_from_addr(addr: usize) -> &'static mut asid_pool_t {
     // ASID Pool's len is BIT!(asidLowBits)
-    convert_to_mut_slice::<T>(addr, BIT!(asidLowBits))
+    // convert_to_mut_slice::<>(addr, BIT!(asidLowBits))
+    assert_ne!(addr, 0);
+    convert_to_mut_type_ref(addr)
 }
-
-impl From<usize> for asid_pool_t {
-    fn from(value: usize) -> Self {
-        asid_pool_t(value)
-    }
-}
-
-impl_multi!(asid_pool_t {
-    #[inline]
-    pub fn asid_map_slice<T>(&self) -> &'static mut [T] {
-        asid_pool_slice::<T>(self.0 as usize)
-    }
-
-    #[inline]
-    pub fn get_asid_map(&self, idx: usize) -> asid_map_t {
-        self.asid_map_slice::<asid_map_t>()[idx]
-    }
-
-    #[inline]
-    pub fn set_asid_map(&self, idx: usize, val: asid_map_t) {
-        self.asid_map_slice::<usize>()[idx] = val.get_vspace_root();
-    }
-});
 
 plus_define_bitfield! {
     pgde_t, 1, 0, 0, 0 => {
@@ -134,7 +135,7 @@ plus_define_bitfield! {
     asid_map_t, 1, 0, 0, 1 => {
         new_none, 0 => {},
         new_vspace, 0 => {
-            vspace_root , get_vspace_root , set_vspace_root , 0, 12, 36, 0 ,true
+            vspace_root , get_vspace_root , set_vspace_root , 0, 0, 48, 0 ,true
         }
     }
 }

@@ -1,6 +1,6 @@
 use sel4_cspace::arch::cap_t;
-
 use crate::{map_it_pud_cap, pptr_t, vptr_t, PageTable};
+
 impl PageTable {
     pub(crate) const PTE_NUM_IN_PAGE: usize = 0x200;
 }

@@ -2,14 +2,15 @@ use core::intrinsics::unlikely;
 use core::ops::{Deref, DerefMut};
 
 use super::machine::*;
-use super::pte::vm_page_size;
+use super::pte::VMPageSize;
 use crate::{
     ap_from_vm_rights, asid_t, find_map_for_asid, find_vspace_for_asid, pptr_t, pptr_to_paddr,
     vm_attributes_t, vptr_t, PDE, PGDE, PTE, PUDE,
 };
 use sel4_common::arch::config::PPTR_BASE;
+use sel4_common::sel4_config::{ARM_Large_Page, ARM_Small_Page};
 use sel4_common::structures::exception_t;
-use sel4_common::utils::convert_to_type_ref;
+use sel4_common::utils::{convert_to_type_ref, ptr_to_mut, ptr_to_ref};
 use sel4_common::{
     arch::vm_rights_t,
     fault::lookup_fault_t,
@@ -321,67 +322,76 @@ pub fn unmap_page_table(asid: asid_t, vaddr: vptr_t, pt: &PTE) {
     }
 }
 
-pub fn unmap_page(page_size: vm_page_size, asid: asid_t, vptr: vptr_t, pptr: pptr_t) {
+/// Unmap a page table
+/// TODO: Remove result Result<(), lookup_fault_t>
+#[no_mangle]
+pub fn unmapPage(page_size: usize, asid: asid_t, vptr: vptr_t, pptr: pptr_t) -> Result<(), lookup_fault_t> {
+    let addr = pptr_to_paddr(pptr);
     let find_ret = find_vspace_for_asid(asid);
+    
     if unlikely(find_ret.status != exception_t::EXCEPTION_NONE) {
-        return;
+        return Ok(());
     }
-
     match page_size {
-        vm_page_size::ARMSmallPage => {
-            if find_ret.vspace_root.is_none() {
-                return;
+        ARM_Small_Page => {
+            let lu_ret = PTE(find_ret.vspace_root.unwrap() as _).lookup_pt_slot(vptr);
+            if unlikely(lu_ret.status != exception_t::EXCEPTION_NONE) {
+                return Ok(());
             }
-
-            let lookup_ret = unsafe { (*find_ret.vspace_root.unwrap()).lookup_pt_slot(vptr) };
-            if unlikely(lookup_ret.status != exception_t::EXCEPTION_NONE) {
-                return;
+            let pte = ptr_to_mut(lu_ret.ptSlot);
+            if pte.pte_ptr_get_present() && pte.pte_ptr_get_page_base_address() == addr {
+                *pte = PTE(0);
+                log::warn!("Need to clean D-Cache using cleanByVA_PoU");
             }
-
-            let slot = unsafe { &mut (*lookup_ret.ptSlot) };
-
-            // 当前页表项不是有效的页表项或者不是要unmap的页
-            if !slot.pte_ptr_get_present()
-                || slot.pte_ptr_get_page_base_address() != pptr_to_paddr(pptr)
-            {
-                return;
-            }
-
-            slot.invalidate();
-            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+            Ok(())
         }
-        vm_page_size::ARMLargePage => {
-            let lookup_ret = unsafe { (*find_ret.vspace_root.unwrap()).lookup_pd_slot(vptr) };
-            if unlikely(lookup_ret.status != exception_t::EXCEPTION_NONE) {
-                return;
+        ARM_Large_Page => {
+            let lu_ret = PTE(find_ret.vspace_root.unwrap() as _).lookup_pd_slot(vptr);
+            if unlikely(lu_ret.status != exception_t::EXCEPTION_NONE) {
+                return Ok(());
             }
-
-            let slot = unsafe { &mut (*lookup_ret.pdSlot) };
-
-            if !slot.get_present() || slot.get_pt_base_address() != pptr_to_paddr(pptr) {
-                return;
+            let pde = ptr_to_mut(lu_ret.pdSlot);
+            // TODO: Rename get_pt_base_address to get_base_address
+            if pde.get_present() && pde.get_pt_base_address() == addr {
+                *pde = PDE(0);
+                log::warn!("Need to clean D-Cache using cleanByVA_PoU");
             }
-
-            slot.invalidate();
-            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+            Ok(())
         }
-        vm_page_size::ARMHugePage => {
-            let lookup_ret = unsafe { (*find_ret.vspace_root.unwrap()).lookup_pud_slot(vptr) };
-            if unlikely(lookup_ret.status != exception_t::EXCEPTION_NONE) {
-                return;
-            }
-
-            let slot = unsafe { &mut (*lookup_ret.pudSlot) };
-
-            if !slot.get_present() || slot.get_pd_base_address() != pptr_to_paddr(pptr) {
-                return;
-            }
-
-            slot.invalidate();
-            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
-        }
+        _ => unimplemented!("unMapPage: {page_size}")
     }
-
-    assert!(asid < BIT!(16));
-    invalidate_tlb_by_asid_va(asid, vptr);
+    /*
+        switch (page_size) {
+        case ARMLargePage: {
+            lookupPDSlot_ret_t lu_ret;
+            lu_ret = lookupPDSlot(find_ret.vspace_root, vptr);
+            if (unlikely(lu_ret.status != EXCEPTION_NONE)) {
+                return;
+            }
+            if (pde_pde_large_ptr_get_present(lu_ret.pdSlot) &&
+                pde_pde_large_ptr_get_page_base_address(lu_ret.pdSlot) == addr) {
+                *(lu_ret.pdSlot) = pde_invalid_new();
+                cleanByVA_PoU((vptr_t)lu_ret.pdSlot, pptr_to_paddr(lu_ret.pdSlot));
+            }
+            break;
+        }
+        case ARMHugePage: {
+            lookupPUDSlot_ret_t lu_ret;
+            lu_ret = lookupPUDSlot(find_ret.vspace_root, vptr);
+            if (unlikely(lu_ret.status != EXCEPTION_NONE)) {
+                return;
+            }
+            if (pude_pude_1g_ptr_get_present(lu_ret.pudSlot) &&
+                pude_pude_1g_ptr_get_page_base_address(lu_ret.pudSlot) == addr) {
+                *(lu_ret.pudSlot) = pude_invalid_new();
+                cleanByVA_PoU((vptr_t)lu_ret.pudSlot, pptr_to_paddr(lu_ret.pudSlot));
+            }
+            break;
+        }
+        default:
+            fail("Invalid ARM page type");
+        }
+        assert(asid < BIT(16));
+        invalidateTLBByASIDVA(asid, vptr); 
+    */
 }

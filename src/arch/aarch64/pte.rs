@@ -11,24 +11,37 @@ use crate::{
     asid_t, find_vspace_for_asid, lookupFrame_ret_t, pptr_to_paddr, vm_attributes_t, vptr_t, PDE,
     PGDE, PTE, PUDE,
 };
+use log::debug;
 use sel4_common::{
     arch::vm_rights_t,
     fault::lookup_fault_t,
     sel4_config::{
         seL4_PageBits, seL4_PageTableBits, ARM_Huge_Page, ARM_Large_Page, ARM_Small_Page,
-        PT_INDEX_BITS,
+        PD_INDEX_BITS, PT_INDEX_BITS, PUD_INDEX_BITS,
     },
     structures::exception_t,
     utils::{convert_ref_type_to_usize, convert_to_mut_type_ref, convert_to_type_ref},
     BIT,
 };
 
-use super::utils::{paddr_to_pptr, GET_UPT_INDEX};
+use super::utils::{get_current_lookup_fault, paddr_to_pptr, GET_UPT_INDEX};
 
-pub enum vm_page_size {
-    ARMSmallPage,
+pub enum VMPageSize {
+    ARMSmallPage = 0,
     ARMLargePage,
     ARMHugePage,
+}
+
+impl VMPageSize {
+    /// Get VMPageSize from usize
+    pub fn try_from_usize(value: usize) -> Option<VMPageSize> {
+        match value {
+            0 => Some(VMPageSize::ARMSmallPage),
+            1 => Some(VMPageSize::ARMLargePage),
+            2 => Some(VMPageSize::ARMHugePage),
+            _ => None,
+        }
+    }
 }
 
 enum pte_tag_t {
@@ -181,7 +194,7 @@ impl PTE {
             flags |= PTEFlags::UXN;
         }
         flags |= Self::ap_from_vm_rights_t(rights);
-        if vm_page_size::ARMSmallPage as usize == page_size {
+        if VMPageSize::ARMSmallPage as usize == page_size {
             PTE::new_4k_page(paddr, flags)
         } else {
             PTE::new(paddr, flags)
@@ -230,8 +243,9 @@ impl PTE {
         }
         unsafe {
             if (*pdSlot.pdSlot).get_present() == false {
-                // todo!() I cannot use current_lookup_fault here
-                // current_lookup_fault =lookup_fault_t::new_missing_cap(seL4_PageBits+PT_INDEX_BITS);
+                *get_current_lookup_fault() =
+                    lookup_fault_t::new_missing_cap(seL4_PageBits + PT_INDEX_BITS);
+
                 let ret = lookupPTSlot_ret_t {
                     status: exception_t::EXCEPTION_LOOKUP_FAULT,
                     ptSlot: 0 as *mut PTE,
@@ -265,8 +279,9 @@ impl PTE {
         }
         unsafe {
             if (*pudSlot.pudSlot).get_present() == false {
-                // todo!() I cannot use current_lookup_fault here
-                // current_lookup_fault =lookup_fault_t::new_missing_cap(seL4_PageBits+PT_INDEX_BITS);
+                *get_current_lookup_fault() =
+                    lookup_fault_t::new_missing_cap(seL4_PageBits + PT_INDEX_BITS + PD_INDEX_BITS);
+
                 let ret = lookupPDSlot_ret_t {
                     status: exception_t::EXCEPTION_LOOKUP_FAULT,
                     pdSlot: 0 as *mut PDE,
@@ -288,8 +303,9 @@ impl PTE {
         let pgdSlot = self.lookup_pgd_slot(vptr);
         unsafe {
             if (*pgdSlot.pgdSlot).get_present() == false {
-                // todo!() I cannot use current_lookup_fault here
-                // current_lookup_fault =lookup_fault_t::new_missing_cap(seL4_PageBits+PT_INDEX_BITS);
+                *get_current_lookup_fault() = lookup_fault_t::new_missing_cap(
+                    seL4_PageBits + PT_INDEX_BITS + PD_INDEX_BITS + PUD_INDEX_BITS,
+                );
                 let ret = lookupPUDSlot_ret_t {
                     status: exception_t::EXCEPTION_LOOKUP_FAULT,
                     pudSlot: 0 as *mut PUDE,
