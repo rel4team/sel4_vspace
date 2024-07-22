@@ -76,9 +76,7 @@ pub fn clean_by_va_pou(vaddr: usize, _paddr: usize) {
 
 #[inline(always)]
 pub fn dmb() {
-    unsafe {
-        asm!("dmb", options(nostack, preserves_flags));
-    }
+    log::warn!("dmb is not implemented");
 }
 
 // TIPS: please use const to make code cleaner and faster.
