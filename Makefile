@@ -18,7 +18,7 @@ print-%:
 	@echo $*=$($*)
 
 test: test_build
-	@cargo test 
+	@cargo test -F unit-test 
 
 .PHONY: clean test
 clean:
