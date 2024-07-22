@@ -10,7 +10,7 @@ use crate::{
 use sel4_common::arch::config::PPTR_BASE;
 use sel4_common::sel4_config::{ARM_Large_Page, ARM_Small_Page};
 use sel4_common::structures::exception_t;
-use sel4_common::utils::{convert_to_type_ref, ptr_to_mut, ptr_to_ref};
+use sel4_common::utils::{convert_to_type_ref, ptr_to_mut};
 use sel4_common::{
     arch::vm_rights_t,
     fault::lookup_fault_t,
@@ -325,10 +325,15 @@ pub fn unmap_page_table(asid: asid_t, vaddr: vptr_t, pt: &PTE) {
 /// Unmap a page table
 /// TODO: Remove result Result<(), lookup_fault_t>
 #[no_mangle]
-pub fn unmapPage(page_size: usize, asid: asid_t, vptr: vptr_t, pptr: pptr_t) -> Result<(), lookup_fault_t> {
+pub fn unmapPage(
+    page_size: usize,
+    asid: asid_t,
+    vptr: vptr_t,
+    pptr: pptr_t,
+) -> Result<(), lookup_fault_t> {
     let addr = pptr_to_paddr(pptr);
     let find_ret = find_vspace_for_asid(asid);
-    
+
     if unlikely(find_ret.status != exception_t::EXCEPTION_NONE) {
         return Ok(());
     }
@@ -358,7 +363,7 @@ pub fn unmapPage(page_size: usize, asid: asid_t, vptr: vptr_t, pptr: pptr_t) -> 
             }
             Ok(())
         }
-        _ => unimplemented!("unMapPage: {page_size}")
+        _ => unimplemented!("unMapPage: {page_size}"),
     }
     /*
         switch (page_size) {
@@ -392,6 +397,6 @@ pub fn unmapPage(page_size: usize, asid: asid_t, vptr: vptr_t, pptr: pptr_t) -> 
             fail("Invalid ARM page type");
         }
         assert(asid < BIT(16));
-        invalidateTLBByASIDVA(asid, vptr); 
+        invalidateTLBByASIDVA(asid, vptr);
     */
 }
