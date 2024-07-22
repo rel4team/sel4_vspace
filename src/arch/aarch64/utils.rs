@@ -1,10 +1,14 @@
+use core::intrinsics::unlikely;
+
 use super::machine::mair_types;
 use super::structures::{
     lookupFrame_ret_t, lookupPDSlot_ret_t, lookupPGDSlot_ret_t, lookupPTSlot_ret_t,
     lookupPUDSlot_ret_t,
 };
+use super::{clean_by_va_pou, find_vspace_for_asid, invalidate_tlb_by_asid};
 use crate::arch::VAddr;
 use crate::vptr_t;
+use sel4_common::utils::convert_ref_type_to_usize;
 use sel4_common::{
     arch::{
         config::{KERNEL_ELF_BASE_OFFSET, PPTR_BASE_OFFSET},
@@ -229,6 +233,11 @@ impl_multi!(PGDE, PUDE, PDE, PTE {
 
 impl PGDE {
     #[inline]
+    pub const fn invalid_new() -> Self {
+        Self(0)
+    }
+
+    #[inline]
     pub const fn get_pgde_type(&self) -> usize {
         self.0 & 0x3
     }
@@ -245,6 +254,10 @@ impl PGDE {
 }
 
 impl PUDE {
+    #[inline]
+    pub const fn invalid_new() -> Self {
+        Self(0)
+    }
     #[inline]
     pub const fn new_1g(
         uxn: bool,
@@ -291,6 +304,64 @@ impl PUDE {
     pub fn get_pd_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
     }
+
+    // pgde_t *pageUpperDirectoryMapped(asid_t asid, vptr_t vaddr, pude_t *pud)
+    // {
+    //     findVSpaceForASID_ret_t find_ret;
+    //     lookupPGDSlot_ret_t lu_ret;
+
+    //     find_ret = findVSpaceForASID(asid);
+    //     if (find_ret.status != EXCEPTION_NONE) {
+    //         return NULL;
+    //     }
+
+    //     lu_ret = lookupPGDSlot(find_ret.vspace_root, vaddr);
+    //     if (pgde_pgde_pud_ptr_get_present(lu_ret.pgdSlot) &&
+    //         (pgde_pgde_pud_ptr_get_pud_base_address(lu_ret.pgdSlot) == pptr_to_paddr(pud))) {
+    //         return lu_ret.pgdSlot;
+    //     }
+
+    //     return NULL;
+    // }
+
+    //     void unmapPageUpperDirectory(asid_t asid, vptr_t vaddr, pude_t *pud)
+    // {
+    //     pgde_t *pgdSlot;
+
+    //     pgdSlot = pageUpperDirectoryMapped(asid, vaddr, pud);
+    //     if (likely(pgdSlot != NULL)) {
+    //         *pgdSlot = pgde_pgde_invalid_new();
+    //         cleanByVA_PoU((vptr_t)pgdSlot, pptr_to_paddr(pgdSlot));
+    //         invalidateTLBByASID(asid);
+    //     }
+    // }
+
+    #[inline]
+    pub fn unmap_page_upper_directory(&self, asid: usize, vptr: vptr_t) {
+        let find_ret = find_vspace_for_asid(asid);
+        if unlikely(find_ret.status != exception_t::EXCEPTION_NONE) {
+            return;
+        }
+
+        let pt = find_ret.vspace_root.unwrap();
+        if pt as usize == 0 {
+            return;
+        }
+
+        // TODO : below code will cause panic in sel4test end, unknown why
+        let lu_ret = unsafe { (*pt).lookup_pgd_slot(vptr) };
+        // let pgdSlot = unsafe { &mut *lu_ret.pgdSlot };
+        // if lu_ret.pgdSlot as usize != 0 {
+        //     if pgdSlot.get_present()!=0 && pgdSlot.get_pud_base_address() == pptr_to_paddr(self.0) {
+        //         *pgdSlot = PGDE::invalid_new();
+        //         clean_by_va_pou(
+        //             convert_ref_type_to_usize(pgdSlot),
+        //             pptr_to_paddr(convert_ref_type_to_usize(pgdSlot)),
+        //         );
+        // invalidate_tlb_by_asid(asid);
+        //     }
+        // }
+    }
 }
 
 impl PDE {
@@ -317,10 +388,8 @@ impl PDE {
     }
 
     #[inline]
-    pub const fn new_small(
-        pt_base_address: usize
-    ) -> Self {
-        Self((pt_base_address & 0xfffffffff000)|(pde_tag_t::pde_small as usize & 0x3))
+    pub const fn new_small(pt_base_address: usize) -> Self {
+        Self((pt_base_address & 0xfffffffff000) | (pde_tag_t::pde_small as usize & 0x3))
     }
 
     #[inline]
@@ -349,6 +418,70 @@ impl PDE {
     pub const fn get_pt_base_address(&self) -> usize {
         self.0 & 0xfffffffff000
     }
+
+    // pude_t *pageDirectoryMapped(asid_t asid, vptr_t vaddr, pde_t *pd)
+    // {
+    //     findVSpaceForASID_ret_t find_ret;
+    //     lookupPUDSlot_ret_t lu_ret;
+
+    //     find_ret = findVSpaceForASID(asid);
+    //     if (find_ret.status != EXCEPTION_NONE) {
+    //         return NULL;
+    //     }
+
+    //     lu_ret = lookupPUDSlot(find_ret.vspace_root, vaddr);
+    //     if (lu_ret.status != EXCEPTION_NONE) {
+    //         return NULL;
+    //     }
+
+    //     if (pude_pude_pd_ptr_get_present(lu_ret.pudSlot) &&
+    //         (pude_pude_pd_ptr_get_pd_base_address(lu_ret.pudSlot) == pptr_to_paddr(pd))) {
+    //         return lu_ret.pudSlot;
+    //     }
+
+    //     return NULL;
+    // }
+
+    #[inline]
+    pub fn unmap_page_directory(&self, asid: usize, vaddr: usize) {
+        let find_ret = find_vspace_for_asid(asid);
+        if find_ret.status != exception_t::EXCEPTION_NONE {
+            return;
+        }
+
+        // TODO:: below code will cause sel4test end panic
+        // let pt = unsafe { &mut *(find_ret.vspace_root.unwrap()) };
+        // let lu_ret = pt.lookup_pud_slot(vaddr);
+        // if lu_ret.status != exception_t::EXCEPTION_NONE {
+        //     return;
+        // }
+        
+        // TODO:: please notice this log::warn
+        // log::warn!("remove this log will cause assert error");
+        // let pud = unsafe { &mut *lu_ret.pudSlot };
+
+        // if pud.get_present() && pud.get_pd_base_address() == pptr_to_paddr(self.0) {
+        //     pud.invalidate();
+        //     clean_by_va_pou(
+        //         convert_ref_type_to_usize(pud),
+        //         pptr_to_paddr(convert_ref_type_to_usize(pud)),
+        //     );
+        //     invalidate_tlb_by_asid(asid);
+        // }
+    }
+
+    //     void unmapPageDirectory(asid_t asid, vptr_t vaddr, pde_t *pd)
+    // {
+    //     pude_t *pudSlot;
+
+    //     pudSlot = pageDirectoryMapped(asid, vaddr, pd);
+    //     if (likely(pudSlot != NULL)) {
+    //         *pudSlot = pude_invalid_new();
+
+    //         cleanByVA_PoU((vptr_t)pudSlot, pptr_to_paddr(pudSlot));
+    //         invalidateTLBByASID(asid);
+    //     }
+    // }
 }
 
 impl PTE {

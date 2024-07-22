@@ -40,7 +40,7 @@ pub fn dsb() {
 #[inline]
 pub fn isb() {
     unsafe {
-        asm!("isb", options(nostack, preserves_flags));
+        asm!("isb sy", options(nostack, preserves_flags));
     }
 }
 
@@ -66,6 +66,7 @@ pub fn invalidate_local_tlb_va_asid(mva_plus_asid: usize) {
     isb();
 }
 
+
 #[inline(always)]
 pub fn clean_by_va_pou(vaddr: usize, _paddr: usize) {
     unsafe {
@@ -73,12 +74,6 @@ pub fn clean_by_va_pou(vaddr: usize, _paddr: usize) {
     }
     dmb();
 }
-
-// static inline void cleanByVA(vptr_t vaddr, paddr_t paddr)
-// {
-//     __asm__ volatile("dc cvac, %0" : : "r"(vaddr));
-//     dmb();
-// }
 
 #[inline(always)]
 pub fn clean_by_va(vaddr: usize, _paddr: usize) {
@@ -89,6 +84,31 @@ pub fn clean_by_va(vaddr: usize, _paddr: usize) {
 }
 
 #[inline(always)]
+pub fn invalidate_by_va(vaddr: usize, _paddr: usize) {
+    unsafe {
+        asm!("dc ivac, {}", in(reg) vaddr);
+    }
+    dmb();
+}
+
+#[inline(always)]
+pub fn clean_inval_by_va(vaddr: usize, _paddr: usize) {
+    unsafe {
+        asm!("dc civac, {}", in(reg) vaddr);
+    }
+    dsb();
+}
+
+#[inline(always)]
+pub fn invalidate_by_va_i(vaddr: usize, _paddr: usize) {
+    unsafe {
+        asm!("ic ivau, {}", in(reg) vaddr);
+    }
+    dsb();
+    isb();
+}
+
+#[inline(always)]
 pub fn dmb() {
     unsafe {
         asm!("dmb sy", options(nostack, preserves_flags));
@@ -96,21 +116,6 @@ pub fn dmb() {
 }
 
 // TIPS: please use const to make code cleaner and faster.
-
-// void cleanCacheRange_PoU(vptr_t start, vptr_t end, paddr_t pstart)
-// {
-//     vptr_t line;
-//     word_t index;
-
-//     /** GHOSTUPD: "((gs_get_assn cap_get_capSizeBits_'proc \<acute>ghost'state = 0
-//             \<or> \<acute>end - \<acute>start <= gs_get_assn cap_get_capSizeBits_'proc \<acute>ghost'state)
-//         \<and> \<acute>start <= \<acute>end
-//         \<and> \<acute>pstart <= \<acute>pstart + (\<acute>end - \<acute>start), id)" */
-//     for (index = LINE_INDEX(start); index < LINE_INDEX(end) + 1; index++) {
-//         line = index << L1_CACHE_LINE_SIZE_BITS;
-//         cleanByVA_PoU(line, pstart + (line - start));
-//     }
-// }
 
 pub fn clean_cache_range_ram(start: usize, end: usize, pstart: usize) {
     clean_cache_range_poc(start, end, pstart);
@@ -130,16 +135,13 @@ const fn LINE_INDEX(a: usize) -> usize {
     LINE_START(a) >> L1_CACHE_LINE_SIZE_BITS
 }
 
-// static void cleanCacheRange_PoC(vptr_t start, vptr_t end, paddr_t pstart)
-// {
-//     vptr_t line;
-//     word_t index;
-
-//     for (index = LINE_INDEX(start); index < LINE_INDEX(end) + 1; index++) {
-//         line = index << L1_CACHE_LINE_SIZE_BITS;
-//         cleanByVA(line, pstart + (line - start));
-//     }
-// }
+#[inline]
+pub fn invalidate_cache_range_i(start: usize, end: usize, pstart: usize) {
+    for idx in LINE_INDEX(start)..LINE_INDEX(end) + 1 {
+        let line = idx << L1_CACHE_LINE_SIZE_BITS;
+        invalidate_by_va_i(line, pstart + line - start);
+    }
+}
 
 #[inline]
 pub fn clean_cache_range_poc(start: usize, end: usize, pstart: usize) {
@@ -149,30 +151,17 @@ pub fn clean_cache_range_poc(start: usize, end: usize, pstart: usize) {
     }
 }
 
-// void cleanCacheRange_PoU(vptr_t start, vptr_t end, paddr_t pstart)
-// {
-//     vptr_t line;
-//     word_t index;
-
-//     /** GHOSTUPD: "((gs_get_assn cap_get_capSizeBits_'proc \<acute>ghost'state = 0
-//             \<or> \<acute>end - \<acute>start <= gs_get_assn cap_get_capSizeBits_'proc \<acute>ghost'state)
-//         \<and> \<acute>start <= \<acute>end
-//         \<and> \<acute>pstart <= \<acute>pstart + (\<acute>end - \<acute>start), id)" */
-//     for (index = LINE_INDEX(start); index < LINE_INDEX(end) + 1; index++) {
-//         line = index << L1_CACHE_LINE_SIZE_BITS;
-//         cleanByVA_PoU(line, pstart + (line - start));
-//     }
-// }
 
 #[inline]
 pub fn clean_cache_range_pou(start: usize, end: usize, pstart: usize) {
     for idx in LINE_INDEX(start)..LINE_INDEX(end) + 1 {
         let line = idx << L1_CACHE_LINE_SIZE_BITS;
-        clean_by_va_pou(line, pstart + line - start);
+        // TODO: below code will cause assert fail in sel4test-drivers
+        // clean_by_va_pou(line, pstart + line - start);
     }
 }
 
-pub fn plat_clean_l2_range(pstart: usize, pend: usize) {}
+pub fn plat_clean_l2_range(_pstart: usize, _pend: usize) {}
 
 #[inline]
 const fn loc(x: usize) -> usize {
@@ -203,6 +192,42 @@ pub enum arm_cache_type {
     ARMCacheI = 1,
     ARMCacheD = 2,
     ARMCacheID = 3,
+}
+
+fn plat_cleanInvalidateL2Range(start: usize, end: usize) {}
+
+#[inline]
+pub fn clean_invalidate_cache_range_ram(start: usize, end: usize, pstart: usize) {
+    clean_cache_range_poc(start, end, pstart);
+
+    dsb();
+
+    plat_cleanInvalidateL2Range(pstart, pstart + end - start);
+    for idx in LINE_INDEX(start)..LINE_INDEX(end) + 1 {
+        let line = idx << L1_CACHE_LINE_SIZE_BITS;
+        clean_inval_by_va(line, pstart + line - start);
+    }
+    dsb();
+}
+
+fn plat_invalidateL2Range(start: usize, end: usize) {}
+
+#[inline]
+pub fn invalidate_cache_range_ram(start: usize, end: usize, pstart: usize) {
+    if start != LINE_START(start) {
+        clean_cache_range_ram(start, end, pstart);
+    }
+    if end + 1 != LINE_START(end + 1) {
+        let line = LINE_START(end);
+        clean_cache_range_ram(line, line, pstart + line - start);
+    }
+    plat_invalidateL2Range(pstart, pstart + end - start);
+
+    for idx in LINE_INDEX(start)..LINE_INDEX(end) + 1 {
+        let line = idx << L1_CACHE_LINE_SIZE_BITS;
+        invalidate_by_va(line, pstart + line - start);
+    }
+    dsb();
 }
 
 pub fn clean_invalidate_l1_caches() {

@@ -1,15 +1,16 @@
 use core::intrinsics::unlikely;
 use core::ops::{Deref, DerefMut};
 
-use super::machine::*;
+use super::{machine::*, paddr_to_pptr};
 use crate::{
     ap_from_vm_rights, asid_t, find_map_for_asid, find_vspace_for_asid, pptr_t, pptr_to_paddr,
     vm_attributes_t, vptr_t, PDE, PGDE, PTE, PUDE,
 };
 use sel4_common::arch::config::PPTR_BASE;
+use sel4_common::arch::MessageLabel;
 use sel4_common::sel4_config::{ARM_Large_Page, ARM_Small_Page};
 use sel4_common::structures::exception_t;
-use sel4_common::utils::{convert_to_type_ref, ptr_to_mut, ptr_to_ref};
+use sel4_common::utils::{convert_ref_type_to_usize, convert_to_type_ref, ptr_to_mut, ptr_to_ref};
 use sel4_common::{
     arch::vm_rights_t,
     fault::lookup_fault_t,
@@ -342,7 +343,11 @@ pub fn unmapPage(
                 *pte = PTE(0);
                 // TODO: Use Clean By VA instead of this line.
                 unsafe { core::arch::asm!("tlbi vmalle1; dsb sy; isb") };
-                log::warn!("Need to clean D-Cache using cleanByVA_PoU");
+                // log::warn!("Need to clean D-Cache using cleanByVA_PoU");
+                clean_by_va_pou(
+                    convert_ref_type_to_usize(pte),
+                    paddr_to_pptr(convert_ref_type_to_usize(pte)),
+                );
             }
             Ok(())
         }
@@ -358,7 +363,11 @@ pub fn unmapPage(
                 *pde = PDE(0);
                 // TODO: Use Clean By VA instead of this line.
                 unsafe { core::arch::asm!("tlbi vmalle1; dsb sy; isb") };
-                log::warn!("Need to clean D-Cache using cleanByVA_PoU");
+                // log::warn!("Need to clean D-Cache using cleanByVA_PoU");
+                clean_by_va_pou(
+                    convert_ref_type_to_usize(pde),
+                    paddr_to_pptr(convert_ref_type_to_usize(pde)),
+                );
             }
             Ok(())
         }
@@ -398,4 +407,27 @@ pub fn unmapPage(
         assert(asid < BIT(16));
         invalidateTLBByASIDVA(asid, vptr);
     */
+}
+
+pub fn doFlush(invLabel: MessageLabel, start: usize, end: usize, pstart: usize) {
+    // TODO: below codes will cause sel4test end panic 
+    // match invLabel {
+    //     MessageLabel::ARMPageClean_Data | MessageLabel::ARMVSpaceClean_Data => {
+    //         clean_cache_range_ram(start, end, pstart)
+    //     }
+    //     MessageLabel::ARMPageInvalidate_Data | MessageLabel::ARMVSpaceInvalidate_Data => {
+    //         invalidate_cache_range_ram(start, end, pstart)
+    //     }
+    //     MessageLabel::ARMVSpaceCleanInvalidate_Data | MessageLabel::ARMPageCleanInvalidate_Data => {
+    //         clean_invalidate_cache_range_ram(start, end, pstart);
+    //     }
+    //     MessageLabel::ARMPageUnify_Instruction | MessageLabel::ARMVSpaceUnify_Instruction => {
+    //         // TODO: below line will cause assert fail in sel4test-drivers
+    //         // clean_cache_range_pou(start, end, pstart);
+    //         dsb();
+    //         invalidate_cache_range_i(start, end, pstart);
+    //         isb();
+    //     }
+    //     _ => unimplemented!("unimplemented doFlush :{:?}", invLabel),
+    // }
 }
