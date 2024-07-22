@@ -90,7 +90,9 @@ pub fn clean_by_va(vaddr: usize, _paddr: usize) {
 
 #[inline(always)]
 pub fn dmb() {
-    log::warn!("dmb is not implemented");
+    unsafe {
+        asm!("dmb sy", options(nostack, preserves_flags));
+    }
 }
 
 // TIPS: please use const to make code cleaner and faster.
