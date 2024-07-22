@@ -1,7 +1,7 @@
 use core::arch::asm;
 
 use aarch64_cpu::registers::{Writeable, TTBR0_EL1, TTBR1_EL1};
-use sel4_common::MASK;
+use sel4_common::{sel4_config::L1_CACHE_LINE_SIZE_BITS, MASK, ROUND_DOWN};
 #[inline]
 pub fn setCurrentKernelVSpaceRoot(val: usize) {
     TTBR1_EL1.set(val as _);
@@ -74,12 +74,41 @@ pub fn clean_by_va_pou(vaddr: usize, _paddr: usize) {
     dmb();
 }
 
+// static inline void cleanByVA(vptr_t vaddr, paddr_t paddr)
+// {
+//     __asm__ volatile("dc cvac, %0" : : "r"(vaddr));
+//     dmb();
+// }
+
+#[inline(always)]
+pub fn clean_by_va(vaddr: usize, _paddr: usize) {
+    unsafe {
+        asm!("dc cvac, {}", in(reg) vaddr);
+    }
+    dmb();
+}
+
 #[inline(always)]
 pub fn dmb() {
     log::warn!("dmb is not implemented");
 }
 
 // TIPS: please use const to make code cleaner and faster.
+
+// void cleanCacheRange_PoU(vptr_t start, vptr_t end, paddr_t pstart)
+// {
+//     vptr_t line;
+//     word_t index;
+
+//     /** GHOSTUPD: "((gs_get_assn cap_get_capSizeBits_'proc \<acute>ghost'state = 0
+//             \<or> \<acute>end - \<acute>start <= gs_get_assn cap_get_capSizeBits_'proc \<acute>ghost'state)
+//         \<and> \<acute>start <= \<acute>end
+//         \<and> \<acute>pstart <= \<acute>pstart + (\<acute>end - \<acute>start), id)" */
+//     for (index = LINE_INDEX(start); index < LINE_INDEX(end) + 1; index++) {
+//         line = index << L1_CACHE_LINE_SIZE_BITS;
+//         cleanByVA_PoU(line, pstart + (line - start));
+//     }
+// }
 
 pub fn clean_cache_range_ram(start: usize, end: usize, pstart: usize) {
     clean_cache_range_poc(start, end, pstart);
@@ -89,7 +118,57 @@ pub fn clean_cache_range_ram(start: usize, end: usize, pstart: usize) {
     plat_clean_l2_range(pstart, pstart + (end - start));
 }
 
-pub fn clean_cache_range_poc(start: usize, end: usize, pstart: usize) {}
+#[inline]
+const fn LINE_START(a: usize) -> usize {
+    ROUND_DOWN!(a, L1_CACHE_LINE_SIZE_BITS)
+}
+
+#[inline]
+const fn LINE_INDEX(a: usize) -> usize {
+    LINE_START(a) >> L1_CACHE_LINE_SIZE_BITS
+}
+
+// static void cleanCacheRange_PoC(vptr_t start, vptr_t end, paddr_t pstart)
+// {
+//     vptr_t line;
+//     word_t index;
+
+//     for (index = LINE_INDEX(start); index < LINE_INDEX(end) + 1; index++) {
+//         line = index << L1_CACHE_LINE_SIZE_BITS;
+//         cleanByVA(line, pstart + (line - start));
+//     }
+// }
+
+#[inline]
+pub fn clean_cache_range_poc(start: usize, end: usize, pstart: usize) {
+    for idx in LINE_INDEX(start)..LINE_INDEX(end) + 1 {
+        let line = idx << L1_CACHE_LINE_SIZE_BITS;
+        clean_by_va(line, pstart + line - start);
+    }
+}
+
+// void cleanCacheRange_PoU(vptr_t start, vptr_t end, paddr_t pstart)
+// {
+//     vptr_t line;
+//     word_t index;
+
+//     /** GHOSTUPD: "((gs_get_assn cap_get_capSizeBits_'proc \<acute>ghost'state = 0
+//             \<or> \<acute>end - \<acute>start <= gs_get_assn cap_get_capSizeBits_'proc \<acute>ghost'state)
+//         \<and> \<acute>start <= \<acute>end
+//         \<and> \<acute>pstart <= \<acute>pstart + (\<acute>end - \<acute>start), id)" */
+//     for (index = LINE_INDEX(start); index < LINE_INDEX(end) + 1; index++) {
+//         line = index << L1_CACHE_LINE_SIZE_BITS;
+//         cleanByVA_PoU(line, pstart + (line - start));
+//     }
+// }
+
+#[inline]
+pub fn clean_cache_range_pou(start: usize, end: usize, pstart: usize) {
+    for idx in LINE_INDEX(start)..LINE_INDEX(end) + 1 {
+        let line = idx << L1_CACHE_LINE_SIZE_BITS;
+        clean_by_va_pou(line, pstart + line - start);
+    }
+}
 
 pub fn plat_clean_l2_range(pstart: usize, pend: usize) {}
 

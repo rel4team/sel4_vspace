@@ -116,10 +116,10 @@ pub fn ap_from_vm_rights(rights: vm_rights_t) -> usize {
 
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct PGDE(usize);
+pub struct PGDE(pub usize);
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct PUDE(usize);
+pub struct PUDE(pub usize);
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct PDE(pub usize);
