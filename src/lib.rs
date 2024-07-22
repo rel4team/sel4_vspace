@@ -31,16 +31,23 @@ pub use structures::*;
 pub use utils::checkVPAlignment;
 // pub use riscv::*;
 
-#[cfg(all(test, target_arch = "aarch64"))]
-pub mod trap;
+// #[cfg(all(test, target_arch = "aarch64"))]
+// pub mod trap;
+
+#[cfg(target_arch = "aarch64")]
+mod trap;
+
+#[cfg(target_arch = "aarch64")]
+pub use trap::*;
 
 #[cfg(test)]
 pub mod tests {
 
-    use core::arch::asm;
+    use core::arch::{asm, global_asm};
     #[cfg(target_arch = "riscv64")]
-    use riscv::register::stvec;
+    use riscv::register::{stvec, utvec::TrapMode};
     use sel4_common::{arch::shutdown, println};
+    global_asm!(include_str!("entry.asm"));
 
     #[cfg(target_arch = "aarch64")]
     pub use crate::trap::*;
@@ -63,6 +70,7 @@ pub mod tests {
 
     #[no_mangle]
     pub fn call_test_main() {
+        println!("hello world!");
         #[cfg(target_arch = "riscv64")]
         {
             extern "C" {

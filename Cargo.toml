@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 bitflags = "2.0.2"
 sel4_cspace = { git = "https://github.com/rel4team/sel4_cspace.git", branch = "mi_dev" }
-sel4_common = { git = "https://github.com/rel4team/sel4_common.git", branch = "mi_dev"}
+sel4_common = { git = "https://github.com/rel4team/sel4_common.git", branch = "feature/test-check" }
 
 log = "0.4"
 
@@ -20,3 +20,6 @@ tock-registers = "0.8"
 
 [features]
 ENABLE_SMP = []
+unit-test = [
+    "sel4_common/unit-test",
+]

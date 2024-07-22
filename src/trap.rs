@@ -1,6 +1,6 @@
 use core::arch::global_asm;
 
-use aarch64_cpu::{asm::barrier, registers::*, asm};
+use aarch64_cpu::{asm, registers::*};
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
 
 global_asm!(include_str!("trap.S"));
