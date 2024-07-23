@@ -1,5 +1,6 @@
 use sel4_common::{
     fault::lookup_fault_t,
+    println,
     sel4_config::{asidHighBits, asidLowBits, IT_ASID},
     structures::exception_t,
     utils::{convert_to_mut_type_ref, convert_to_option_mut_type_ref},
@@ -7,9 +8,7 @@ use sel4_common::{
 };
 use sel4_cspace::arch::cap_t;
 
-use crate::{
-    asid_map_t, asid_pool_t, asid_t, findVSpaceForASID_ret, pptr_to_paddr, set_vm_root, PTE,
-};
+use crate::{asid_map_t, asid_pool_t, asid_t, findVSpaceForASID_ret, set_vm_root, PTE};
 
 use super::asid_pool_from_addr;
 use super::machine::invalidate_local_tlb_asid;
@@ -56,8 +55,10 @@ pub fn find_vspace_for_asid(asid: usize) -> findVSpaceForASID_ret {
 
     match find_map_for_asid(asid) {
         Some(asid_map) => {
-            ret.vspace_root = Some(asid_map.get_vspace_root() as *mut PTE);
-            ret.status = exception_t::EXCEPTION_NONE;
+            if asid_map.get_type() == asid_map_asid_map_vspace {
+                ret.vspace_root = Some(asid_map.get_vspace_root() as *mut PTE);
+                ret.status = exception_t::EXCEPTION_NONE;
+            }
         }
         None => {}
     }

@@ -2,19 +2,12 @@ use sel4_common::{
     arch::{
         config::{PADDR_BASE, PADDR_TOP, PPTR_BASE, PPTR_TOP},
         vm_rights_t,
-    },
-    sel4_config::{seL4_LargePageBits, ARM_Large_Page, ARM_Small_Page, PT_INDEX_BITS},
-    utils::convert_to_mut_type_ref,
-    BIT,
+    }, println, sel4_config::{seL4_LargePageBits, ARM_Large_Page, ARM_Small_Page, PT_INDEX_BITS}, utils::convert_to_mut_type_ref, BIT
 };
 use sel4_cspace::arch::cap_t;
 
 use crate::{
-    arch::VAddr, asid_t, get_kernel_page_directory_base_by_index, get_kernel_page_table_base,
-    get_kernel_page_upper_directory_base, kpptr_to_paddr, pptr_t, pptr_to_paddr,
-    set_kernel_page_directory_by_index, set_kernel_page_global_directory_by_index,
-    set_kernel_page_table_by_index, set_kernel_page_upper_directory_by_index, vm_attributes_t,
-    vptr_t, PTEFlags, GET_KPT_INDEX, GET_PT_INDEX, PDE, PGDE, PTE, PUDE,
+    arch::VAddr, asid_t, get_kernel_page_directory_base_by_index, get_kernel_page_global_directory_base, get_kernel_page_table_base, get_kernel_page_upper_directory_base, kpptr_to_paddr, pptr_t, pptr_to_paddr, set_kernel_page_directory_by_index, set_kernel_page_global_directory_by_index, set_kernel_page_table_by_index, set_kernel_page_upper_directory_by_index, vm_attributes_t, vptr_t, PTEFlags, GET_KPT_INDEX, GET_PT_INDEX, PDE, PGDE, PTE, PUDE
 };
 
 use super::page_slice;
@@ -41,6 +34,7 @@ pub const RESERVED: usize = 3;
 #[no_mangle]
 #[link_section = ".boot.text"]
 pub fn rust_map_kernel_window() {
+    
     set_kernel_page_global_directory_by_index(
         GET_KPT_INDEX(PPTR_BASE, 0),
         PTE::pte_next_table(kpptr_to_paddr(get_kernel_page_upper_directory_base()), true),

@@ -2,7 +2,6 @@ use core::intrinsics::unlikely;
 use core::ops::{Deref, DerefMut};
 
 use super::machine::*;
-use super::pte::VMPageSize;
 use crate::{
     ap_from_vm_rights, asid_t, find_map_for_asid, find_vspace_for_asid, pptr_t, pptr_to_paddr,
     vm_attributes_t, vptr_t, PDE, PGDE, PTE, PUDE,
