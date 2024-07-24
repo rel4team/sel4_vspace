@@ -305,36 +305,6 @@ impl PUDE {
         self.0 & 0xfffffffff000
     }
 
-    // pgde_t *pageUpperDirectoryMapped(asid_t asid, vptr_t vaddr, pude_t *pud)
-    // {
-    //     findVSpaceForASID_ret_t find_ret;
-    //     lookupPGDSlot_ret_t lu_ret;
-
-    //     find_ret = findVSpaceForASID(asid);
-    //     if (find_ret.status != EXCEPTION_NONE) {
-    //         return NULL;
-    //     }
-
-    //     lu_ret = lookupPGDSlot(find_ret.vspace_root, vaddr);
-    //     if (pgde_pgde_pud_ptr_get_present(lu_ret.pgdSlot) &&
-    //         (pgde_pgde_pud_ptr_get_pud_base_address(lu_ret.pgdSlot) == pptr_to_paddr(pud))) {
-    //         return lu_ret.pgdSlot;
-    //     }
-
-    //     return NULL;
-    // }
-
-    //     void unmapPageUpperDirectory(asid_t asid, vptr_t vaddr, pude_t *pud)
-    // {
-    //     pgde_t *pgdSlot;
-
-    //     pgdSlot = pageUpperDirectoryMapped(asid, vaddr, pud);
-    //     if (likely(pgdSlot != NULL)) {
-    //         *pgdSlot = pgde_pgde_invalid_new();
-    //         cleanByVA_PoU((vptr_t)pgdSlot, pptr_to_paddr(pgdSlot));
-    //         invalidateTLBByASID(asid);
-    //     }
-    // }
 
     #[inline]
     pub fn unmap_page_upper_directory(&self, asid: usize, vptr: vptr_t) {
@@ -350,17 +320,17 @@ impl PUDE {
 
         // TODO : below code will cause panic in sel4test end, unknown why
         let lu_ret = unsafe { (*pt).lookup_pgd_slot(vptr) };
-        // let pgdSlot = unsafe { &mut *lu_ret.pgdSlot };
-        // if lu_ret.pgdSlot as usize != 0 {
-        //     if pgdSlot.get_present()!=0 && pgdSlot.get_pud_base_address() == pptr_to_paddr(self.0) {
-        //         *pgdSlot = PGDE::invalid_new();
-        //         clean_by_va_pou(
-        //             convert_ref_type_to_usize(pgdSlot),
-        //             pptr_to_paddr(convert_ref_type_to_usize(pgdSlot)),
-        //         );
-        // invalidate_tlb_by_asid(asid);
-        //     }
-        // }
+        let pgdSlot = unsafe { &mut *lu_ret.pgdSlot };
+        if lu_ret.pgdSlot as usize != 0 {
+            if pgdSlot.get_present() && pgdSlot.get_pud_base_address() == pptr_to_paddr(self.0) {
+                *pgdSlot = PGDE::invalid_new();
+                clean_by_va_pou(
+                    convert_ref_type_to_usize(pgdSlot),
+                    pptr_to_paddr(convert_ref_type_to_usize(pgdSlot)),
+                );
+                invalidate_tlb_by_asid(asid);
+            }
+        }
     }
 }
 
@@ -449,39 +419,25 @@ impl PDE {
             return;
         }
 
-        // TODO:: below code will cause sel4test end panic
-        // let pt = unsafe { &mut *(find_ret.vspace_root.unwrap()) };
-        // let lu_ret = pt.lookup_pud_slot(vaddr);
-        // if lu_ret.status != exception_t::EXCEPTION_NONE {
-        //     return;
-        // }
-        
-        // TODO:: please notice this log::warn
-        // log::warn!("remove this log will cause assert error");
-        // let pud = unsafe { &mut *lu_ret.pudSlot };
+        // TODO: below code will cause sel4test end panic
+        let pt = unsafe { &mut *(find_ret.vspace_root.unwrap()) };
+        let lu_ret = pt.lookup_pud_slot(vaddr);
+        if lu_ret.status != exception_t::EXCEPTION_NONE {
+            return;
+        }
 
-        // if pud.get_present() && pud.get_pd_base_address() == pptr_to_paddr(self.0) {
-        //     pud.invalidate();
-        //     clean_by_va_pou(
-        //         convert_ref_type_to_usize(pud),
-        //         pptr_to_paddr(convert_ref_type_to_usize(pud)),
-        //     );
-        //     invalidate_tlb_by_asid(asid);
-        // }
+        let pud = unsafe { &mut *lu_ret.pudSlot };
+
+        if pud.get_present() && pud.get_pd_base_address() == pptr_to_paddr(self.0) {
+            pud.invalidate();
+            clean_by_va_pou(
+                convert_ref_type_to_usize(pud),
+                pptr_to_paddr(convert_ref_type_to_usize(pud)),
+            );
+            invalidate_tlb_by_asid(asid);
+        }
     }
 
-    //     void unmapPageDirectory(asid_t asid, vptr_t vaddr, pde_t *pd)
-    // {
-    //     pude_t *pudSlot;
-
-    //     pudSlot = pageDirectoryMapped(asid, vaddr, pd);
-    //     if (likely(pudSlot != NULL)) {
-    //         *pudSlot = pude_invalid_new();
-
-    //         cleanByVA_PoU((vptr_t)pudSlot, pptr_to_paddr(pudSlot));
-    //         invalidateTLBByASID(asid);
-    //     }
-    // }
 }
 
 impl PTE {

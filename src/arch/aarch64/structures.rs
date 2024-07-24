@@ -131,8 +131,8 @@ plus_define_bitfield! {
 plus_define_bitfield! {
     asid_map_t, 1, 0, 0, 1 => {
         new_none, 0 => {},
-        new_vspace, 0 => {
-            vspace_root , get_vspace_root , set_vspace_root , 0, 0, 48, 0 ,true
+        new_vspace, 1 => {
+            vspace_root , get_vspace_root , set_vspace_root , 0, 12, 36, 12 ,true
         }
     }
 }

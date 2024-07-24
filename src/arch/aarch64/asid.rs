@@ -44,16 +44,16 @@ pub fn find_map_for_asid(asid: usize) -> Option<&'static asid_map_t> {
     None
 }
 
-#[no_mangle]
 pub fn find_vspace_for_asid(asid: usize) -> findVSpaceForASID_ret {
     let mut ret: findVSpaceForASID_ret = findVSpaceForASID_ret {
         status: exception_t::EXCEPTION_LOOKUP_FAULT,
         vspace_root: None,
         lookup_fault: Some(lookup_fault_t::new_root_invalid()),
     };
-
+    // log::error!("in find_vspace_for_asid asid :{:#x}", asid);
     match find_map_for_asid(asid) {
         Some(asid_map) => {
+            // TODO : below code will cause sel4test driver assert failed
             if asid_map.get_type() == asid_map_asid_map_vspace {
                 ret.vspace_root = Some(asid_map.get_vspace_root() as *mut PTE);
                 ret.status = exception_t::EXCEPTION_NONE;
@@ -107,6 +107,11 @@ pub fn delete_asid_pool(
 pub fn write_it_asid_pool(it_ap_cap: &cap_t, it_vspace_cap: &cap_t) {
     let ap = asid_pool_from_addr(it_ap_cap.get_cap_ptr());
     let asid_map = asid_map_t::new_vspace(it_vspace_cap.get_pgd_base_ptr());
+    // log::error!(
+    //     "write asid type:{:#x} vspace :{:#x}",
+    //     asid_map.words[0],
+    //     it_vspace_cap.get_pgd_base_ptr()
+    // );
     ap[IT_ASID] = asid_map;
     set_asid_pool_by_index(IT_ASID >> asidLowBits, ap as *const _ as usize);
 }

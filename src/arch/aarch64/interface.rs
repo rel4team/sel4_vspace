@@ -341,9 +341,7 @@ pub fn unmapPage(
             let pte = ptr_to_mut(lu_ret.ptSlot);
             if pte.pte_ptr_get_present() && pte.pte_ptr_get_page_base_address() == addr {
                 *pte = PTE(0);
-                // TODO: Use Clean By VA instead of this line.
                 unsafe { core::arch::asm!("tlbi vmalle1; dsb sy; isb") };
-                // log::warn!("Need to clean D-Cache using cleanByVA_PoU");
                 clean_by_va_pou(
                     convert_ref_type_to_usize(pte),
                     paddr_to_pptr(convert_ref_type_to_usize(pte)),
@@ -361,9 +359,7 @@ pub fn unmapPage(
             // TODO: Rename get_pt_base_address to get_base_address
             if pde.get_present() && pde.get_pt_base_address() == addr {
                 *pde = PDE(0);
-                // TODO: Use Clean By VA instead of this line.
                 unsafe { core::arch::asm!("tlbi vmalle1; dsb sy; isb") };
-                // log::warn!("Need to clean D-Cache using cleanByVA_PoU");
                 clean_by_va_pou(
                     convert_ref_type_to_usize(pde),
                     paddr_to_pptr(convert_ref_type_to_usize(pde)),
@@ -410,24 +406,22 @@ pub fn unmapPage(
 }
 
 pub fn doFlush(invLabel: MessageLabel, start: usize, end: usize, pstart: usize) {
-    // TODO: below codes will cause sel4test end panic 
-    // match invLabel {
-    //     MessageLabel::ARMPageClean_Data | MessageLabel::ARMVSpaceClean_Data => {
-    //         clean_cache_range_ram(start, end, pstart)
-    //     }
-    //     MessageLabel::ARMPageInvalidate_Data | MessageLabel::ARMVSpaceInvalidate_Data => {
-    //         invalidate_cache_range_ram(start, end, pstart)
-    //     }
-    //     MessageLabel::ARMVSpaceCleanInvalidate_Data | MessageLabel::ARMPageCleanInvalidate_Data => {
-    //         clean_invalidate_cache_range_ram(start, end, pstart);
-    //     }
-    //     MessageLabel::ARMPageUnify_Instruction | MessageLabel::ARMVSpaceUnify_Instruction => {
-    //         // TODO: below line will cause assert fail in sel4test-drivers
-    //         // clean_cache_range_pou(start, end, pstart);
-    //         dsb();
-    //         invalidate_cache_range_i(start, end, pstart);
-    //         isb();
-    //     }
-    //     _ => unimplemented!("unimplemented doFlush :{:?}", invLabel),
-    // }
+    match invLabel {
+        MessageLabel::ARMPageClean_Data | MessageLabel::ARMVSpaceClean_Data => {
+            clean_cache_range_ram(start, end, pstart)
+        }
+        MessageLabel::ARMPageInvalidate_Data | MessageLabel::ARMVSpaceInvalidate_Data => {
+            invalidate_cache_range_ram(start, end, pstart)
+        }
+        MessageLabel::ARMVSpaceCleanInvalidate_Data | MessageLabel::ARMPageCleanInvalidate_Data => {
+            clean_invalidate_cache_range_ram(start, end, pstart);
+        }
+        MessageLabel::ARMPageUnify_Instruction | MessageLabel::ARMVSpaceUnify_Instruction => {
+            clean_cache_range_pou(start, end, pstart);
+            dsb();
+            invalidate_cache_range_i(start, end, pstart);
+            isb();
+        }
+        _ => unimplemented!("unimplemented doFlush :{:?}", invLabel),
+    }
 }
