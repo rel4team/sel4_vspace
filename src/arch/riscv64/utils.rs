@@ -62,7 +62,7 @@ pub fn paddr_to_pptr(x: usize) -> usize {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct PTE(pub usize);
 
 impl PTE {
