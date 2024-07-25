@@ -9,7 +9,7 @@ use crate::{
 use sel4_common::arch::config::PPTR_BASE;
 use sel4_common::sel4_config::{ARM_Large_Page, ARM_Small_Page};
 use sel4_common::structures::exception_t;
-use sel4_common::utils::{convert_to_type_ref, ptr_to_mut, ptr_to_ref};
+use sel4_common::utils::{convert_to_mut_type_ref, convert_to_type_ref, ptr_to_mut, ptr_to_ref};
 use sel4_common::{
     arch::vm_rights_t,
     fault::lookup_fault_t,
@@ -209,7 +209,7 @@ pub fn set_vm_root_for_flush_with_thread_root(
 pub fn page_upper_directory_mapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> Option<*mut PGDE> {
     match find_map_for_asid(asid) {
         Some(asid_map) => {
-            let lookup_ret = PTE(asid_map.get_vspace_root()).lookup_pgd_slot(vaddr);
+            let lookup_ret = PGDE::new_from_pte(asid_map.get_vspace_root()).lookup_pgd_slot(vaddr);
             if lookup_ret.status != exception_t::EXCEPTION_NONE {
                 return None;
             }
@@ -231,7 +231,7 @@ pub fn page_upper_directory_mapped(asid: asid_t, vaddr: vptr_t, pud: &PUDE) -> O
 pub fn page_directory_mapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*mut PUDE> {
     match find_map_for_asid(asid) {
         Some(asid_map) => {
-            let lookup_ret = PTE(asid_map.get_vspace_root()).lookup_pud_slot(vaddr);
+            let lookup_ret = PGDE::new_from_pte(asid_map.get_vspace_root()).lookup_pud_slot(vaddr);
             if lookup_ret.status != exception_t::EXCEPTION_NONE {
                 return None;
             }
@@ -251,18 +251,18 @@ pub fn page_directory_mapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*m
 }
 
 /// TODO: Make pt as usize of
-pub fn page_table_mapped(asid: asid_t, vaddr: vptr_t, pt: usize) -> Option<*mut PDE> {
+pub fn page_table_mapped(asid: asid_t, vaddr: vptr_t, pt: &PTE) -> Option<*mut PDE> {
     match find_map_for_asid(asid) {
         Some(asid_map) => {
             let lookup_ret =
-                convert_to_type_ref::<PTE>(asid_map.get_vspace_root()).lookup_pd_slot(vaddr);
+			PGDE::new_from_pte(asid_map.get_vspace_root()).lookup_pd_slot(vaddr);
             if lookup_ret.status != exception_t::EXCEPTION_NONE {
                 return None;
             }
 
             let slot = unsafe { &mut (*lookup_ret.pdSlot) };
 
-            if !slot.get_present() || slot.get_pt_base_address() != pptr_to_paddr(pt) {
+            if !slot.get_present() || slot.get_pt_base_address() != pptr_to_paddr(pt.0) {
                 return None;
             }
 
@@ -306,7 +306,7 @@ pub fn unmap_page_directory(asid: asid_t, vaddr: vptr_t, pd: &PDE) {
     }
 }
 
-pub fn unmap_page_table(asid: asid_t, vaddr: vptr_t, pt: usize) {
+pub fn unmap_page_table(asid: asid_t, vaddr: vptr_t, pt: &PTE) {
     match page_table_mapped(asid, vaddr, pt) {
         Some(slot) => {
             let slot = unsafe { &mut (*slot) };
@@ -333,7 +333,7 @@ pub fn unmapPage(
     }
     match page_size {
         ARM_Small_Page => {
-            let lu_ret = PTE(find_ret.vspace_root.unwrap() as _).lookup_pt_slot(vptr);
+            let lu_ret = PGDE::new_from_pte(find_ret.vspace_root.unwrap() as usize).lookup_pt_slot(vptr);
             if unlikely(lu_ret.status != exception_t::EXCEPTION_NONE) {
                 return Ok(());
             }
@@ -348,7 +348,7 @@ pub fn unmapPage(
         }
         ARM_Large_Page => {
             log::info!("unmap large page: {:#x?}", vptr);
-            let lu_ret = PTE(find_ret.vspace_root.unwrap() as _).lookup_pd_slot(vptr);
+            let lu_ret = PGDE::new_from_pte(find_ret.vspace_root.unwrap() as usize).lookup_pd_slot(vptr) ;
             if unlikely(lu_ret.status != exception_t::EXCEPTION_NONE) {
                 return Ok(());
             }
