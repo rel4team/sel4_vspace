@@ -54,7 +54,7 @@ pub fn find_vspace_for_asid(asid: usize) -> findVSpaceForASID_ret {
 
     match find_map_for_asid(asid) {
         Some(asid_map) => {
-            ret.vspace_root = Some(asid_map.get_vspace_root() as *mut PTE);
+            ret.vspace_root = Some(asid_map.get_vspace_root() as *mut PGDE);
             ret.status = exception_t::EXCEPTION_NONE;
         }
         None => {}

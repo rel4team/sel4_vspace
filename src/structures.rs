@@ -34,7 +34,7 @@ pub struct findVSpaceForASID_ret {
 #[derive(Copy, Clone)]
 pub struct findVSpaceForASID_ret {
     pub status: exception_t,
-    pub vspace_root: Option<*mut PTE>,
+    pub vspace_root: Option<*mut PGDE>,
     pub lookup_fault: Option<lookup_fault_t>,
 }
 
