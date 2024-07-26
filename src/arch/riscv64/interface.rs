@@ -1,13 +1,13 @@
+use crate::asid_t;
 use crate::find_vspace_for_asid;
-use core::intrinsics::unlikely;
-use sel4_common::{fault::lookup_fault_t, structures::exception_t, utils::convert_to_mut_type_ref};
-use sel4_cspace::interface::{cap_t, CapTag};
 use crate::sfence;
+use crate::vptr_t;
 use crate::PTEFlags;
 use crate::RISCV_GET_PT_INDEX;
+use core::intrinsics::unlikely;
 use sel4_common::sel4_config::CONFIG_PT_LEVELS;
-use crate::vptr_t;
-use crate::asid_t;
+use sel4_common::{fault::lookup_fault_t, structures::exception_t, utils::convert_to_mut_type_ref};
+use sel4_cspace::interface::{cap_t, CapTag};
 
 use crate::PTE;
 
@@ -43,27 +43,27 @@ pub fn set_vm_root(vspace_root: &cap_t) -> Result<(), lookup_fault_t> {
     ret
 }
 pub fn unmap_page_table(asid: asid_t, vptr: vptr_t, pt: &PTE) {
-	let target_pt = pt as *const _ as *mut PTE ;
-	let find_ret = find_vspace_for_asid(asid);
-	if find_ret.status != exception_t::EXCEPTION_NONE {
-		return;
-	}
-	assert_ne!(find_ret.vspace_root.unwrap(), target_pt);
-	let mut pt = find_ret.vspace_root.unwrap();
-	let mut ptSlot = unsafe { &mut *(pt.add(RISCV_GET_PT_INDEX(vptr, 0))) };
-	let mut i = 0;
-	while i < CONFIG_PT_LEVELS - 1 && pt != target_pt {
-		ptSlot = unsafe { &mut *(pt.add(RISCV_GET_PT_INDEX(vptr, i))) };
-		if unlikely(ptSlot.is_pte_table()) {
-			return;
-		}
-		pt = ptSlot.get_pte_from_ppn_mut() as *mut PTE;
-		i += 1;
-	}
+    let target_pt = pt as *const _ as *mut PTE;
+    let find_ret = find_vspace_for_asid(asid);
+    if find_ret.status != exception_t::EXCEPTION_NONE {
+        return;
+    }
+    assert_ne!(find_ret.vspace_root.unwrap(), target_pt);
+    let mut pt = find_ret.vspace_root.unwrap();
+    let mut ptSlot = unsafe { &mut *(pt.add(RISCV_GET_PT_INDEX(vptr, 0))) };
+    let mut i = 0;
+    while i < CONFIG_PT_LEVELS - 1 && pt != target_pt {
+        ptSlot = unsafe { &mut *(pt.add(RISCV_GET_PT_INDEX(vptr, i))) };
+        if unlikely(ptSlot.is_pte_table()) {
+            return;
+        }
+        pt = ptSlot.get_pte_from_ppn_mut() as *mut PTE;
+        i += 1;
+    }
 
-	if pt != target_pt {
-		return;
-	}
-	*ptSlot = PTE::new(0, PTEFlags::empty());
-	sfence();
+    if pt != target_pt {
+        return;
+    }
+    *ptSlot = PTE::new(0, PTEFlags::empty());
+    sfence();
 }
