@@ -202,26 +202,24 @@ impl PTE {
     //         return;
     //     }
     //     let pgde: *mut PGDE = find_ret.vspace_root.unwrap();
-        
-	// 	let lu_ret=PGDE::new_from_pte(pgde as usize).lookup_pd_slot(vptr);
 
-	// 	if unlikely(lu_ret.status !=exception_t::EXCEPTION_NONE){
-	// 		return;
-	// 	}
-	// 	if convert_to_mut_type_ref::<PDE>(lu_ret.pdSlot as usize).get_present()&& 
-	// 	convert_to_mut_type_ref::<PDE>(lu_ret.pdSlot as usize).get_pd_base_address() != pptr_to_paddr(self.0)
-	// 	{
-	// 		let pd:*mut PDE= lu_ret.pdSlot;
-	// 		unsafe { *pd=PDE::new_invalid() };
-	// 		invalidate_local_tlb_asid(asid);
-	// 			clean_by_va_pou(
-	// 			convert_ref_type_to_usize(pd),
-	// 			pptr_to_paddr(convert_ref_type_to_usize(pd as usize)),
-	// 		)
-	// 	}
+    // 	let lu_ret=PGDE::new_from_pte(pgde as usize).lookup_pd_slot(vptr);
+
+    // 	if unlikely(lu_ret.status !=exception_t::EXCEPTION_NONE){
+    // 		return;
+    // 	}
+    // 	if convert_to_mut_type_ref::<PDE>(lu_ret.pdSlot as usize).get_present()&&
+    // 	convert_to_mut_type_ref::<PDE>(lu_ret.pdSlot as usize).get_pd_base_address() != pptr_to_paddr(self.0)
+    // 	{
+    // 		let pd:*mut PDE= lu_ret.pdSlot;
+    // 		unsafe { *pd=PDE::new_invalid() };
+    // 		invalidate_local_tlb_asid(asid);
+    // 			clean_by_va_pou(
+    // 			convert_ref_type_to_usize(pd),
+    // 			pptr_to_paddr(convert_ref_type_to_usize(pd as usize)),
+    // 		)
+    // 	}
     // }
-
-    
 
     pub fn pte_new(
         UXN: usize,

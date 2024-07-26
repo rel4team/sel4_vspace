@@ -67,7 +67,7 @@ pub fn invalidate_local_tlb_va_asid(mva_plus_asid: usize) {
 }
 
 #[inline(always)]
-pub fn clean_by_va_pou(vaddr: usize, _paddr: usize) {
+pub fn clean_by_va_pou(vaddr: usize,_paddr:usize) {
     unsafe {
         asm!("dc cvau, {}", in(reg) vaddr);
     }
@@ -76,7 +76,9 @@ pub fn clean_by_va_pou(vaddr: usize, _paddr: usize) {
 
 #[inline(always)]
 pub fn dmb() {
-    log::warn!("dmb is not implemented");
+    unsafe {
+        asm!("dmb sy");
+    }
 }
 
 // TIPS: please use const to make code cleaner and faster.

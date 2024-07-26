@@ -254,8 +254,7 @@ pub fn page_directory_mapped(asid: asid_t, vaddr: vptr_t, pd: &PDE) -> Option<*m
 pub fn page_table_mapped(asid: asid_t, vaddr: vptr_t, pt: &PTE) -> Option<*mut PDE> {
     match find_map_for_asid(asid) {
         Some(asid_map) => {
-            let lookup_ret =
-			PGDE::new_from_pte(asid_map.get_vspace_root()).lookup_pd_slot(vaddr);
+            let lookup_ret = PGDE::new_from_pte(asid_map.get_vspace_root()).lookup_pd_slot(vaddr);
             if lookup_ret.status != exception_t::EXCEPTION_NONE {
                 return None;
             }
@@ -287,7 +286,7 @@ pub fn unmap_page_upper_directory(asid: asid_t, vaddr: vptr_t, pud: &PUDE) {
         Some(slot) => {
             let slot = unsafe { &mut (*slot) };
             slot.invalidate();
-            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+            clean_by_va_pou(slot.get_ptr(),pptr_to_paddr(slot.get_ptr()));
             invalidate_tlb_by_asid(asid);
         }
         None => {}
@@ -299,7 +298,7 @@ pub fn unmap_page_directory(asid: asid_t, vaddr: vptr_t, pd: &PDE) {
         Some(slot) => {
             let slot = unsafe { &mut (*slot) };
             slot.invalidate();
-            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+            clean_by_va_pou(slot.get_ptr(),pptr_to_paddr(slot.get_ptr()));
             invalidate_tlb_by_asid(asid);
         }
         None => {}
@@ -311,7 +310,7 @@ pub fn unmap_page_table(asid: asid_t, vaddr: vptr_t, pt: &PTE) {
         Some(slot) => {
             let slot = unsafe { &mut (*slot) };
             slot.invalidate();
-            clean_by_va_pou(slot.get_ptr(), pptr_to_paddr(slot.get_ptr()));
+            clean_by_va_pou(slot.get_ptr(),pptr_to_paddr(slot.get_ptr()));
             invalidate_tlb_by_asid(asid);
         }
         None => {}
@@ -333,22 +332,22 @@ pub fn unmapPage(
     }
     match page_size {
         ARM_Small_Page => {
-            let lu_ret = PGDE::new_from_pte(find_ret.vspace_root.unwrap() as usize).lookup_pt_slot(vptr);
+            let lu_ret =
+                PGDE::new_from_pte(find_ret.vspace_root.unwrap() as usize).lookup_pt_slot(vptr);
             if unlikely(lu_ret.status != exception_t::EXCEPTION_NONE) {
                 return Ok(());
             }
             let pte = ptr_to_mut(lu_ret.ptSlot);
             if pte.pte_ptr_get_present() && pte.pte_ptr_get_page_base_address() == addr {
                 *pte = PTE(0);
-                // TODO: Use Clean By VA instead of this line.
-                unsafe { core::arch::asm!("tlbi vmalle1; dsb sy; isb") };
-                log::warn!("Need to clean D-Cache using cleanByVA_PoU");
+                clean_by_va_pou(pte.get_ptr(),pptr_to_paddr(pte.get_ptr()));
             }
             Ok(())
         }
         ARM_Large_Page => {
             log::info!("unmap large page: {:#x?}", vptr);
-            let lu_ret = PGDE::new_from_pte(find_ret.vspace_root.unwrap() as usize).lookup_pd_slot(vptr) ;
+            let lu_ret =
+                PGDE::new_from_pte(find_ret.vspace_root.unwrap() as usize).lookup_pd_slot(vptr);
             if unlikely(lu_ret.status != exception_t::EXCEPTION_NONE) {
                 return Ok(());
             }
@@ -356,9 +355,7 @@ pub fn unmapPage(
             // TODO: Rename get_pt_base_address to get_base_address
             if pde.get_present() && pde.get_pt_base_address() == addr {
                 *pde = PDE(0);
-                // TODO: Use Clean By VA instead of this line.
-                unsafe { core::arch::asm!("tlbi vmalle1; dsb sy; isb") };
-                log::warn!("Need to clean D-Cache using cleanByVA_PoU");
+                clean_by_va_pou(pde.get_ptr(),pptr_to_paddr(pde.get_ptr()));
             }
             Ok(())
         }

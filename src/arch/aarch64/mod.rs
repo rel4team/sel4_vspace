@@ -9,7 +9,7 @@ mod utils;
 pub use asid::*;
 pub use boot::*;
 pub use interface::*;
-pub use machine::{setCurrentUserVSpaceRoot, ttbr_new};
+pub use machine::{clean_by_va_pou, dmb, setCurrentUserVSpaceRoot, ttbr_new};
 pub use pagetable::create_it_pud_cap;
 pub use pte::PTEFlags;
 pub use structures::*;
