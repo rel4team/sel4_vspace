@@ -226,8 +226,8 @@ impl_multi!(PGDE, PUDE, PDE, PTE {
         self.0 = 0;
     }
 
-	#[inline]
-	pub fn new_invalid() -> Self {
+    #[inline]
+    pub fn new_invalid() -> Self {
         Self::new_page(0, 0)
     }
 });
@@ -248,7 +248,7 @@ impl PGDE {
         self.0 & 0xfffffffff000
     }
 
-	///用于记录某个虚拟地址`vptr`对应的pte表项在内存中的位置
+    ///用于记录某个虚拟地址`vptr`对应的pte表项在内存中的位置
     pub fn lookup_pt_slot(&self, vptr: vptr_t) -> lookupPTSlot_ret_t {
         let pdSlot = self.lookup_pd_slot(vptr);
         if pdSlot.status != exception_t::EXCEPTION_NONE {
@@ -470,10 +470,8 @@ impl PDE {
     }
 
     #[inline]
-    pub const fn new_small(
-        pt_base_address: usize
-    ) -> Self {
-        Self((pt_base_address & 0xfffffffff000)|(pde_tag_t::pde_small as usize & 0x3))
+    pub const fn new_small(pt_base_address: usize) -> Self {
+        Self((pt_base_address & 0xfffffffff000) | (pde_tag_t::pde_small as usize & 0x3))
     }
 
     #[inline]
