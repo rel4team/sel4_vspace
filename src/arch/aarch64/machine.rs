@@ -81,6 +81,7 @@ pub fn dmb() {
 
 // TIPS: please use const to make code cleaner and faster.
 
+#[allow(unused)]
 pub fn clean_cache_range_ram(start: usize, end: usize, pstart: usize) {
     clean_cache_range_poc(start, end, pstart);
 
@@ -89,9 +90,9 @@ pub fn clean_cache_range_ram(start: usize, end: usize, pstart: usize) {
     plat_clean_l2_range(pstart, pstart + (end - start));
 }
 
-pub fn clean_cache_range_poc(start: usize, end: usize, pstart: usize) {}
+pub fn clean_cache_range_poc(_start: usize, _end: usize, _pstart: usize) {}
 
-pub fn plat_clean_l2_range(pstart: usize, pend: usize) {}
+pub fn plat_clean_l2_range(_pstart: usize, _pend: usize) {}
 
 #[inline]
 const fn loc(x: usize) -> usize {
@@ -118,6 +119,7 @@ const fn nsets(s: usize) -> usize {
     ((s >> 13) & MASK!(15)) + 1
 }
 
+#[allow(unused)]
 pub enum arm_cache_type {
     ARMCacheI = 1,
     ARMCacheD = 2,

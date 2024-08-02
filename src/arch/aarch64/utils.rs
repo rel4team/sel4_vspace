@@ -131,6 +131,7 @@ pub struct PTE(pub usize);
 #[derive(Debug, Clone)]
 pub struct ASID(usize);
 
+#[allow(unused)]
 enum pude_tag_t {
     pude_invalid = 0,
     pude_1g = 1,

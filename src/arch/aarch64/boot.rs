@@ -26,6 +26,7 @@ enum find_type {
     PTE,
 }
 
+#[allow(unused)]
 /// TODO: Write the comments.
 pub(crate) enum mair_types {
     DEVICE_nGnRnE = 0,

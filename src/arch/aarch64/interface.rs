@@ -9,7 +9,7 @@ use crate::{
 use sel4_common::arch::config::PPTR_BASE;
 use sel4_common::sel4_config::{ARM_Large_Page, ARM_Small_Page};
 use sel4_common::structures::exception_t;
-use sel4_common::utils::{convert_to_mut_type_ref, convert_to_type_ref, ptr_to_mut, ptr_to_ref};
+use sel4_common::utils::ptr_to_mut;
 use sel4_common::{
     arch::vm_rights_t,
     fault::lookup_fault_t,
