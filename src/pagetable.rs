@@ -3,6 +3,7 @@ use crate::{paddr_t, PTE};
 #[derive(Debug, Clone, Copy)]
 pub struct PageTable(pub(crate) paddr_t);
 
+#[allow(unused)]
 impl PageTable {
     #[inline]
     pub(crate) fn set(&mut self, value: usize) {

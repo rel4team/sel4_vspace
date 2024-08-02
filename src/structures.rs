@@ -7,6 +7,7 @@ use sel4_common::{arch::config::PPTR_BASE, fault::lookup_fault_t, structures::ex
 
 #[cfg(target_arch = "aarch64")]
 use crate::PGDE;
+#[cfg(target_arch = "riscv64")]
 use crate::PTE;
 
 /// 在`PSpace`段的虚拟地址空间中的指针

@@ -1,35 +1,21 @@
-use core::intrinsics::unlikely;
+use crate::{arch::aarch64::machine::clean_by_va_pou, vm_attributes_t, PDE, PGDE, PTE, PUDE};
 
-use crate::{
-    arch::aarch64::machine::{clean_by_va_pou, invalidate_local_tlb_asid},
-    asid_t, find_vspace_for_asid, pptr_to_paddr, vm_attributes_t, vptr_t, PDE, PGDE, PTE, PUDE,
-};
-
-use super::{
-    lookupFrame_ret_t, lookupPDSlot_ret_t, lookupPGDSlot_ret_t, lookupPTSlot_ret_t,
-    lookupPUDSlot_ret_t, utils::paddr_to_pptr, GET_PD_INDEX, GET_PGD_INDEX, GET_PT_INDEX,
-    GET_UPUD_INDEX,
-};
+use super::utils::paddr_to_pptr;
 use sel4_common::{
     arch::vm_rights_t,
-    fault::lookup_fault_t,
-    sel4_config::{
-        seL4_PageBits, seL4_PageTableBits, ARM_Huge_Page, ARM_Large_Page, ARM_Small_Page,
-        PD_INDEX_BITS, PT_INDEX_BITS, PUD_INDEX_BITS,
-    },
-    structures::exception_t,
-    utils::{convert_ref_type_to_usize, convert_to_mut_type_ref, convert_to_type_ref},
+    sel4_config::seL4_PageTableBits,
+    utils::{convert_ref_type_to_usize, convert_to_mut_type_ref},
     BIT,
 };
 
-use super::utils::{get_current_lookup_fault, GET_UPT_INDEX};
-
+#[allow(unused)]
 pub enum VMPageSize {
     ARMSmallPage = 0,
     ARMLargePage,
     ARMHugePage,
 }
 
+#[allow(unused)]
 impl VMPageSize {
     /// Get VMPageSize from usize
     pub fn try_from_usize(value: usize) -> Option<VMPageSize> {
@@ -42,6 +28,7 @@ impl VMPageSize {
     }
 }
 
+#[allow(unused)]
 enum pte_tag_t {
     pte_table = 3,
     pte_page = 1,
@@ -49,18 +36,19 @@ enum pte_tag_t {
     pte_invalid = 0,
 }
 
+#[allow(unused)]
 enum pude_tag_t {
     pude_invalid = 0,
     pude_1g = 1,
     pude_pd = 3,
 }
 
+#[allow(unused)]
 enum pde_tag_t {
     pde_large = 1,
     pde_small = 3,
 }
 
-pub const UPT_LEVELS: usize = 4;
 bitflags::bitflags! {
     /// Possible flags for a page table entry.
     pub struct PTEFlags: usize {
